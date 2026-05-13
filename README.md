@@ -70,7 +70,7 @@ After booting a kernel built with this module, the runtime bridge returns JSON:
     {
       "id": "abk_control",
       "name": "ABK Control Module",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "description": "Expose ABK external module metadata and a shared kernel control interface.",
       "repo_url": "https://github.com/xingguangcuican6666/ABK_control_module",
       "stage": "after_patch",
@@ -125,6 +125,10 @@ abk_control_register(&my_feature_ops);
 
 Use `abk_control_unregister(&my_feature_ops)` when removing a dynamically
 loaded component.
+
+Kernel-side manager bridges can call `abk_control_get_status_json()` and
+`abk_control_run_command()` to read the merged runtime state and dispatch
+`status`, `enable`, or `disable` commands.
 
 ## Development
 

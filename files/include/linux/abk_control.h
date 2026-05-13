@@ -2,7 +2,26 @@
 #ifndef _LINUX_ABK_CONTROL_H
 #define _LINUX_ABK_CONTROL_H
 
+#include <linux/ioctl.h>
 #include <linux/types.h>
+
+#define ABK_CONTROL_MAX_COMMAND 160
+#define ABK_CONTROL_IOCTL_MAGIC 0xa7
+
+struct abk_control_status_cmd {
+	__u64 data_len;
+	__aligned_u64 data;
+};
+
+struct abk_control_command_cmd {
+	__u64 command_len;
+	__aligned_u64 command;
+};
+
+#define ABK_CONTROL_IOCTL_GET_STATUS \
+	_IOWR(ABK_CONTROL_IOCTL_MAGIC, 0x41, struct abk_control_status_cmd)
+#define ABK_CONTROL_IOCTL_RUN_COMMAND \
+	_IOW(ABK_CONTROL_IOCTL_MAGIC, 0x42, struct abk_control_command_cmd)
 
 struct abk_control_manifest_entry {
 	const char *id;
@@ -55,6 +74,8 @@ struct abk_control_ops {
 
 int abk_control_register(const struct abk_control_ops *ops);
 void abk_control_unregister(const struct abk_control_ops *ops);
+int abk_control_get_status_json(char **out, size_t *out_len);
+int abk_control_run_command(const char *command, size_t command_len);
 
 extern const struct abk_control_manifest_entry abk_control_manifest[];
 extern const size_t abk_control_manifest_count;

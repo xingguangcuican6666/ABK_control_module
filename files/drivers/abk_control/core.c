@@ -1,20 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <linux/abk_control.h>
 #include <linux/errno.h>
-#include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
-#include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/string.h>
-#include <linux/uaccess.h>
 
-#define ABK_CONTROL_DEVICE_NAME "abk_control"
 #define ABK_CONTROL_INITIAL_BUFFER 1024
-#define ABK_CONTROL_MAX_WRITE 160
 
 struct abk_control_registration {
 	const struct abk_control_ops *ops;
@@ -566,21 +561,14 @@ void abk_control_unregister(const struct abk_control_ops *ops)
 }
 EXPORT_SYMBOL_GPL(abk_control_unregister);
 
-static ssize_t abk_control_read(struct file *file, char __user *user_buf,
-				size_t count, loff_t *ppos)
+int abk_control_get_status_json(char **out, size_t *out_len)
 {
-	char *status;
-	size_t status_len;
-	ssize_t ret;
+	if (!out || !out_len)
+		return -EINVAL;
 
-	ret = abk_control_build_status(&status, &status_len);
-	if (ret)
-		return ret;
-
-	ret = simple_read_from_buffer(user_buf, count, ppos, status, status_len);
-	kfree(status);
-	return ret;
+	return abk_control_build_status(out, out_len);
 }
+EXPORT_SYMBOL_GPL(abk_control_get_status_json);
 
 static int abk_control_set_enabled(const char *id, bool enabled)
 {
@@ -618,19 +606,23 @@ static int abk_control_status_command(const char *id)
 	return ret;
 }
 
-static ssize_t abk_control_write(struct file *file, const char __user *user_buf,
-				 size_t count, loff_t *ppos)
+int abk_control_run_command(const char *input, size_t count)
 {
-	char command[ABK_CONTROL_MAX_WRITE];
+	char command[ABK_CONTROL_MAX_COMMAND];
 	char *cursor;
 	char *verb;
 	char *id;
 	size_t len;
 	int ret;
 
+	if (!input)
+		return -EINVAL;
+
 	len = min(count, sizeof(command) - 1);
-	if (copy_from_user(command, user_buf, len))
-		return -EFAULT;
+	if (!len)
+		return -EINVAL;
+
+	memcpy(command, input, len);
 	command[len] = '\0';
 
 	cursor = strim(command);
@@ -649,31 +641,17 @@ static ssize_t abk_control_write(struct file *file, const char __user *user_buf,
 	else
 		ret = -EINVAL;
 
-	return ret ? ret : count;
+	return ret;
 }
-
-static const struct file_operations abk_control_fops = {
-	.owner = THIS_MODULE,
-	.read = abk_control_read,
-	.write = abk_control_write,
-	.llseek = default_llseek,
-};
-
-static struct miscdevice abk_control_device = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = ABK_CONTROL_DEVICE_NAME,
-	.fops = &abk_control_fops,
-	.mode = 0600,
-};
+EXPORT_SYMBOL_GPL(abk_control_run_command);
 
 static int __init abk_control_init(void)
 {
-	return misc_register(&abk_control_device);
+	return 0;
 }
 
 static void __exit abk_control_exit(void)
 {
-	misc_deregister(&abk_control_device);
 }
 
 module_init(abk_control_init);

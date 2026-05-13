@@ -102,7 +102,7 @@ assert_count 1 'obj-$(CONFIG_ABK_CONTROL) += abk_control/' "$KERNEL_ROOT/common/
 assert_count 1 'CONFIG_ABK_CONTROL=y' "$DEFCONFIG"
 
 grep -qF '.id = "abk_control"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
-grep -qF '.version = "0.3.0"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.version = "0.4.0"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.stage = "after_patch,before_build"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.id = "alpha_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.id = "beta_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
@@ -122,5 +122,15 @@ grep -qF '\"schema\": 3' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF 'ABK_JSON_FIELD("type", "builtin");' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF 'ABK_JSON_FIELD("source", source);' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF '\"readonly\": %s' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+grep -qF 'abk_control_get_status_json' "$KERNEL_ROOT/common/include/linux/abk_control.h"
+grep -qF 'abk_control_run_command' "$KERNEL_ROOT/common/include/linux/abk_control.h"
+grep -qF 'ABK_CONTROL_IOCTL_GET_STATUS' "$KERNEL_ROOT/common/include/linux/abk_control.h"
+grep -qF 'ABK_CONTROL_IOCTL_RUN_COMMAND' "$KERNEL_ROOT/common/include/linux/abk_control.h"
+grep -qF 'EXPORT_SYMBOL_GPL(abk_control_get_status_json);' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+grep -qF 'EXPORT_SYMBOL_GPL(abk_control_run_command);' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+if grep -qF 'misc_register' "$KERNEL_ROOT/common/drivers/abk_control/core.c"; then
+  echo "abk_control must not create a user-visible misc device" >&2
+  exit 1
+fi
 
 printf 'abk_control_setup_test passed\n'

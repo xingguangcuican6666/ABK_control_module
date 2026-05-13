@@ -72,10 +72,15 @@ struct abk_control_ops {
 
 int abk_control_register(const struct abk_control_ops *ops);
 void abk_control_unregister(const struct abk_control_ops *ops);
+int abk_control_get_status_json(char **out, size_t *out_len);
+int abk_control_run_command(const char *command, size_t command_len);
 ```
 
 `id` must be stable and unique. If it matches a generated manifest entry, the
 runtime output upgrades that entry from metadata-only to controllable.
+The status and command helpers are intended for kernel-side manager bridges;
+callers own the JSON buffer returned by `abk_control_get_status_json()` and
+must release it with `kfree()`.
 
 ## Tests
 
