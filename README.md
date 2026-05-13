@@ -1,127 +1,112 @@
-# ABK External Module Template
+# ABK Control Module
 
-Template repository for AnyBase Kernel (ABK) custom external modules.
+ABK Control Module is an AnyBase Kernel external module that injects a small
+kernel-side control framework into the target kernel tree.
 
-ABK clones external module repositories during the kernel build and runs
-`setup.sh` from the repository root at the configured injection stage. This
-template is intentionally safe by default: it logs the build context and does
-not modify the kernel tree until you add your own logic.
+It provides:
+
+- `/dev/abk_control`, a misc character device for reading ABK external module
+  metadata and sending simple control commands.
+- `include/linux/abk_control.h`, a shared in-kernel API that future controllable
+  ABK modules can use to register enable/disable callbacks.
+- Build-time metadata collection from ABK custom external module `module.conf`
+  files.
 
 ## Usage
 
-Enable "custom external modules" in the ABK app or GitHub Actions, then pass a
-module string in this format:
+Add this repository as a custom external module and select both stages:
 
 ```text
-https://github.com/your-name/your-module.git;after_patch
+https://github.com/xingguangcuican6666/ABK_control_module.git;after_patch|https://github.com/xingguangcuican6666/ABK_control_module.git;before_build
 ```
 
-For ABK APP
+The `after_patch` stage installs the kernel source files. The `before_build`
+stage installs the files again for safety, generates the metadata manifest, and
+enables `CONFIG_ABK_CONTROL=y`.
 
-```
-https://github.com/your-name/your-module.git
-```
-Then choose the after_patch.
+## Device Interface
 
-Multiple modules are separated with `|`:
+After booting a kernel built with this module, read:
 
-```text
-https://github.com/your-name/module-a.git;after_patch|https://github.com/your-name/module-b.git;before_build
-```
-
-Supported stages:
-
-| Stage | Timing | Typical use |
-| --- | --- | --- |
-| `after_patch` | After ABK finishes built-in source integrations such as SUSFS, ZRAM, BBG, DDK, Re-Kernel, NTsync, IPSet, and BBR | Apply source patches, copy driver files, edit Kconfig or Makefile files |
-| `before_build` | After ABK sets the kernel name and build timestamp, immediately before compilation | Final defconfig edits, generated files, validation checks |
-
-`befor_build` is accepted by ABK as a compatibility alias, but new modules
-should use `before_build`.
-
-## Repository Layout
-
-```text
-.
-|-- setup.sh
-|-- module.conf
-|-- scripts/
-|   `-- libabk.sh
-|-- patches/
-|   `-- README.md
-|-- files/
-|   `-- README.md
-`-- docs/
-    `-- development.md
+```sh
+cat /dev/abk_control
 ```
 
-Required entry point:
+The device returns JSON:
 
-- `setup.sh` must exist at the repository root.
-- ABK executes it with `bash setup.sh`.
-- The current working directory is the module repository root.
-
-Recommended workflow:
-
-1. Create a new repository from this template.
-2. Update `module.conf` with your module name, version, and description.
-3. Put patch files under `patches/`.
-4. Put source files or templates under `files/`.
-5. Implement stage-specific logic in `setup.sh`.
-6. Keep every operation idempotent.
-
-## Minimal Example
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-MODULE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-source "$MODULE_DIR/scripts/libabk.sh"
-
-abk_require_env KERNEL_ROOT DEFCONFIG CUSTOM_EXTERNAL_MODULE_STAGE
-
-case "$CUSTOM_EXTERNAL_MODULE_STAGE" in
-  after_patch)
-    abk_apply_patch_dir "$MODULE_DIR/patches/common"
-    ;;
-  before_build)
-    abk_enable_config CONFIG_EXAMPLE_FEATURE
-    ;;
-esac
+```json
+{
+  "schema": 1,
+  "modules": [
+    {
+      "id": "abk_control",
+      "name": "ABK Control Module",
+      "version": "0.1.0",
+      "description": "Expose ABK external module metadata and a shared kernel control interface through /dev/abk_control.",
+      "repo_url": "https://github.com/xingguangcuican6666/ABK_control_module",
+      "stage": "after_patch",
+      "controllable": false,
+      "enabled": true
+    }
+  ]
+}
 ```
 
-## Common Environment Variables
+Supported write commands:
 
-| Variable | Meaning |
-| --- | --- |
-| `GITHUB_WORKSPACE` | GitHub Actions workspace and ABK repository root |
-| `CONFIG` | Build tuple, for example `android15-6.6-118` |
-| `KERNEL_ROOT` | Kernel source directory |
-| `DEFCONFIG` | GKI defconfig path |
-| `CUSTOM_EXTERNAL_MODULE_STAGE` | Current stage, `after_patch` or `before_build` |
-| `CUSTOM_EXTERNAL_MODULES_MANIFEST` | Parsed ABK module manifest |
-| `ZZH_PATCHES` | ABK repository root |
-| `SUSFS4KSU` | SUSFS repository path when SUSFS is enabled |
-| `KERNEL_PATCHES` | `WildKernels/kernel_patches` repository path |
-| `SUKISU_PATCHES` | `ShirkNeko/SukiSU_patch` repository path |
-| `ANYKERNEL3` | AnyKernel3 repository path |
-| `ACTION_BUILD` | Action-Build repository path |
-| `KBUILD_BUILD_TIMESTAMP` | Available in `before_build` |
-| `KBUILD_BUILD_VERSION` | Available in `before_build` |
+```sh
+printf 'status abk_control\n' > /dev/abk_control
+printf 'disable some_feature\n' > /dev/abk_control
+printf 'enable some_feature\n' > /dev/abk_control
+```
 
-See [docs/development.md](docs/development.md) for the full development guide.
+Modules that only appear in the build-time manifest are metadata-only. Enable
+and disable commands return `-EOPNOTSUPP` until a kernel component registers a
+matching control callback.
 
-## Safety Rules
+## Kernel API
 
-- Do not commit tokens, private keys, device private data, or opaque binaries.
-- Do not download and execute unaudited remote scripts.
-- Validate kernel versions and target files before modifying the source tree.
-- Fail clearly with `exit 1` when a required condition is not met.
-- Prefer changing only `$KERNEL_ROOT`, `$DEFCONFIG`, or files inside this
-  module repository.
+Controllable kernel code should include:
 
-## License
+```c
+#include <linux/abk_control.h>
+```
 
-GPL-3.0. Make sure any third-party code or patches you add are compatible with
-the target kernel and this repository license.
+Register an operation table:
+
+```c
+static bool my_feature_enabled(void *data)
+{
+	return true;
+}
+
+static int my_feature_set_enabled(bool enabled, void *data)
+{
+	return 0;
+}
+
+static const struct abk_control_ops my_feature_ops = {
+	.id = "my_feature",
+	.name = "My Feature",
+	.version = "1.0",
+	.description = "Example controllable feature",
+	.is_enabled = my_feature_enabled,
+	.set_enabled = my_feature_set_enabled,
+};
+
+abk_control_register(&my_feature_ops);
+```
+
+Use `abk_control_unregister(&my_feature_ops)` when removing a dynamically
+loaded component.
+
+## Development
+
+Run local checks:
+
+```sh
+bash -n setup.sh scripts/libabk.sh scripts/abk_control_setup.sh tests/abk_control_setup_test.sh
+bash tests/abk_control_setup_test.sh
+```
+
+Full kernel compilation is expected to run in ABK GitHub Actions.

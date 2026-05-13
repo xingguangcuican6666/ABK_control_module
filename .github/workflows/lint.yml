@@ -12,12 +12,15 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Bash syntax
-        run: bash -n setup.sh scripts/libabk.sh
+        run: bash -n setup.sh scripts/libabk.sh scripts/abk_control_setup.sh tests/abk_control_setup_test.sh
 
       - name: ShellCheck
         run: |
           if command -v shellcheck >/dev/null 2>&1; then
-            shellcheck setup.sh scripts/libabk.sh
+            shellcheck setup.sh scripts/libabk.sh scripts/abk_control_setup.sh tests/abk_control_setup_test.sh
           else
             echo "shellcheck is not installed, skipped"
           fi
+
+      - name: Setup test
+        run: bash tests/abk_control_setup_test.sh

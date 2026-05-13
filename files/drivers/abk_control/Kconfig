@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0
+config ABK_CONTROL
+	bool "ABK control interface"
+	help
+	  Provide /dev/abk_control and a small in-kernel registration API for
+	  ABK external modules that expose runtime control hooks.
+
+	  Reading /dev/abk_control returns ABK external module metadata collected
+	  at build time. Writing commands such as "disable <id>" or "enable <id>"
+	  calls the matching registered control callback when one exists.

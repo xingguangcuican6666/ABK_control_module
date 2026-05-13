@@ -1,21 +1,18 @@
 # files/
 
-Place source files, Kconfig files, Makefile snippets, or generated templates
-that should be copied into `$KERNEL_ROOT`.
-
-Example layout:
+Static kernel files copied by `setup.sh`.
 
 ```text
 files/
-`-- drivers/
-    `-- example/
-        |-- Kconfig
-        |-- Makefile
-        `-- example.c
+|-- drivers/
+|   `-- abk_control/
+|       |-- Kconfig
+|       |-- Makefile
+|       `-- core.c
+`-- include/
+    `-- linux/
+        `-- abk_control.h
 ```
 
-Example usage in `setup.sh`:
-
-```bash
-abk_copy_into_kernel "$MODULE_DIR/files/drivers/example" "common/drivers/example"
-```
+`abk_control_manifest.c` is not stored here. It is generated during the
+`before_build` stage from `CUSTOM_EXTERNAL_MODULES_MANIFEST`.
