@@ -1,0 +1,13 @@
+.DS_Store
+.env
+*.orig
+*.rej
+*.tmp
+*.log
+out/
+build/
+dist/
+*.img
+*.zip
+*.tar
+*.tar.gz
