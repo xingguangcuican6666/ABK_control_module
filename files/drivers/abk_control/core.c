@@ -423,12 +423,14 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 	ABK_JSON_FIELD("description", description);
 	ABK_JSON_FIELD("repo_url", repo_url);
 	ABK_JSON_FIELD("stage", stage);
+	ABK_JSON_FIELD("type", "builtin");
 	ABK_JSON_FIELD("source", source);
 
 #undef ABK_JSON_FIELD
 
 	ret = abk_control_buf_appendf(buf,
-				     "\"controllable\": %s, \"enabled\": %s}",
+				     "\"readonly\": %s, \"controllable\": %s, \"enabled\": %s}",
+				     controllable ? "false" : "true",
 				     controllable ? "true" : "false",
 				     enabled ? "true" : "false");
 	return ret;

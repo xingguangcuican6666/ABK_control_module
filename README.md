@@ -70,11 +70,13 @@ After booting a kernel built with this module, the runtime bridge returns JSON:
     {
       "id": "abk_control",
       "name": "ABK Control Module",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": "Expose ABK external module metadata and a shared kernel control interface.",
       "repo_url": "https://github.com/xingguangcuican6666/ABK_control_module",
       "stage": "after_patch",
+      "type": "builtin",
       "source": "abk",
+      "readonly": true,
       "controllable": false,
       "enabled": true
     }

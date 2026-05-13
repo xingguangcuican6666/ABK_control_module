@@ -102,7 +102,7 @@ assert_count 1 'obj-$(CONFIG_ABK_CONTROL) += abk_control/' "$KERNEL_ROOT/common/
 assert_count 1 'CONFIG_ABK_CONTROL=y' "$DEFCONFIG"
 
 grep -qF '.id = "abk_control"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
-grep -qF '.version = "0.2.0"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.version = "0.3.0"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.stage = "after_patch,before_build"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.id = "alpha_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.id = "beta_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
@@ -119,6 +119,8 @@ grep -qF '.use_zram = true' "$KERNEL_ROOT/common/drivers/abk_control/abk_control
 grep -qF '.use_bbg = false' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.enable_susfs = true' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '\"schema\": 3' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+grep -qF 'ABK_JSON_FIELD("type", "builtin");' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF 'ABK_JSON_FIELD("source", source);' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+grep -qF '\"readonly\": %s' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 
 printf 'abk_control_setup_test passed\n'
