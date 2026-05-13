@@ -5,8 +5,8 @@ kernel-side control framework into the target kernel tree.
 
 It provides:
 
-- `/dev/abk_control`, a misc character device for reading ABK external module
-  metadata and sending simple control commands.
+- A small runtime bridge for reading ABK external module metadata and sending
+  simple control commands.
 - `include/linux/abk_control.h`, a shared in-kernel API that future controllable
   ABK modules can use to register enable/disable callbacks.
 - Build-time metadata collection from ABK custom external module `module.conf`
@@ -24,21 +24,23 @@ The `after_patch` stage installs the kernel source files. The `before_build`
 stage installs the files again for safety, generates the metadata and build
 manifest, and enables `CONFIG_ABK_CONTROL=y`.
 
-## Device Interface
+## Runtime Status
 
-After booting a kernel built with this module, read:
-
-```sh
-cat /dev/abk_control
-```
-
-The device returns JSON:
+After booting a kernel built with this module, the runtime bridge returns JSON:
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "abk_version": "1.0.6",
   "abk_commit": "abcdef0",
+  "manager": {
+    "display_name": "ABK Control",
+    "variant": "SukiSU",
+    "backend": "kernel",
+    "version": "",
+    "active": true,
+    "capabilities": ["build", "modules", "abk_control"]
+  },
   "build": {
     "android_version": "android15",
     "kernel_version": "6.6",
@@ -68,10 +70,11 @@ The device returns JSON:
     {
       "id": "abk_control",
       "name": "ABK Control Module",
-      "version": "0.1.0",
-      "description": "Expose ABK external module metadata and a shared kernel control interface through /dev/abk_control.",
+      "version": "0.2.0",
+      "description": "Expose ABK external module metadata and a shared kernel control interface.",
       "repo_url": "https://github.com/xingguangcuican6666/ABK_control_module",
       "stage": "after_patch",
+      "source": "abk",
       "controllable": false,
       "enabled": true
     }
@@ -79,13 +82,7 @@ The device returns JSON:
 }
 ```
 
-Supported write commands:
-
-```sh
-printf 'status abk_control\n' > /dev/abk_control
-printf 'disable some_feature\n' > /dev/abk_control
-printf 'enable some_feature\n' > /dev/abk_control
-```
+Supported commands are `status <id>`, `disable <id>`, and `enable <id>`.
 
 Modules that only appear in the build-time manifest are metadata-only. Enable
 and disable commands return `-EOPNOTSUPP` until a kernel component registers a

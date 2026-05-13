@@ -192,6 +192,38 @@ static int abk_control_buf_append_json_bool_field(struct abk_control_buffer *buf
 	return abk_control_buf_append(buf, trailing_comma ? ",\n" : "\n");
 }
 
+static int abk_control_append_manager_info(struct abk_control_buffer *buf)
+{
+	int ret;
+
+	ret = abk_control_buf_append(buf, "  \"manager\": {\n");
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "display_name",
+					       "ABK Control", true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "variant",
+					       abk_control_build.kernelsu_variant,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "backend", "kernel", true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "version",
+					       abk_control_build.version,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append(buf, "    \"active\": true,\n");
+	if (ret)
+		return ret;
+	return abk_control_buf_append(buf,
+				      "    \"capabilities\": [\"build\", \"modules\", \"abk_control\"]\n"
+				      "  },\n");
+}
+
 static int abk_control_append_build_info(struct abk_control_buffer *buf)
 {
 	int ret;
@@ -361,6 +393,7 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 				     const char *description,
 				     const char *repo_url,
 				     const char *stage,
+				     const char *source,
 				     bool controllable,
 				     bool enabled)
 {
@@ -390,6 +423,7 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 	ABK_JSON_FIELD("description", description);
 	ABK_JSON_FIELD("repo_url", repo_url);
 	ABK_JSON_FIELD("stage", stage);
+	ABK_JSON_FIELD("source", source);
 
 #undef ABK_JSON_FIELD
 
@@ -408,7 +442,10 @@ static int abk_control_build_status(char **out, size_t *out_len)
 	size_t i;
 	int ret;
 
-	ret = abk_control_buf_append(&buf, "{\n  \"schema\": 2,\n");
+	ret = abk_control_buf_append(&buf, "{\n  \"schema\": 3,\n");
+	if (ret)
+		goto err;
+	ret = abk_control_append_manager_info(&buf);
 	if (ret)
 		goto err;
 	ret = abk_control_append_build_info(&buf);
@@ -434,6 +471,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						entry->description,
 						entry->repo_url,
 						entry->stage,
+						"abk",
 						ops && ops->set_enabled,
 						abk_control_ops_enabled(ops));
 		if (ret)
@@ -453,6 +491,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						ops->description,
 						"",
 						"runtime",
+						"abk",
 						ops->set_enabled != NULL,
 						abk_control_ops_enabled(ops));
 		if (ret)

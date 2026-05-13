@@ -39,7 +39,7 @@ break the whole manifest.
 
 ## Build Info
 
-The generated manifest exports schema 2 runtime build information:
+The generated manifest exports schema 3 runtime build information:
 
 - `ABK_BUILD_ANDROID_VERSION`, `ABK_BUILD_KERNEL_VERSION`,
   `ABK_BUILD_SUB_LEVEL`, `ABK_BUILD_OS_PATCH_LEVEL`
@@ -75,7 +75,7 @@ void abk_control_unregister(const struct abk_control_ops *ops);
 ```
 
 `id` must be stable and unique. If it matches a generated manifest entry, the
-device output upgrades that entry from metadata-only to controllable.
+runtime output upgrades that entry from metadata-only to controllable.
 
 ## Tests
 
