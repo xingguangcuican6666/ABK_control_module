@@ -85,6 +85,80 @@ abk_control_c_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
+abk_control_bool_literal() {
+  case "$(printf '%s' "${1:-false}" | tr '[:upper:]' '[:lower:]')" in
+    1|y|yes|true|on) printf 'true\n' ;;
+    *) printf 'false\n' ;;
+  esac
+}
+
+abk_control_abk_root() {
+  if [ -n "${ZZH_PATCHES:-}" ] && [ -d "$ZZH_PATCHES" ]; then
+    printf '%s\n' "$ZZH_PATCHES"
+  elif [ -n "${GITHUB_WORKSPACE:-}" ] && [ -d "$GITHUB_WORKSPACE" ]; then
+    printf '%s\n' "$GITHUB_WORKSPACE"
+  else
+    printf '%s\n' "$PWD"
+  fi
+}
+
+abk_control_abk_version() {
+  local root build_file
+
+  root="$(abk_control_abk_root)"
+  build_file="$root/app/build.gradle.kts"
+  if [ -f "$build_file" ]; then
+    sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$build_file" | head -1
+  fi
+}
+
+abk_control_abk_commit() {
+  local root
+
+  root="$(abk_control_abk_root)"
+  if [ -d "$root/.git" ]; then
+    git -C "$root" rev-parse --short HEAD 2>/dev/null || true
+  fi
+}
+
+abk_control_emit_build_info() {
+  local output_file="$1"
+  local abk_version abk_commit
+
+  abk_version="$(abk_control_abk_version)"
+  abk_commit="$(abk_control_abk_commit)"
+
+  {
+    printf '\nconst struct abk_control_build_info abk_control_build = {\n'
+    printf '\t.abk_version = "%s",\n' "$(abk_control_c_escape "$abk_version")"
+    printf '\t.abk_commit = "%s",\n' "$(abk_control_c_escape "$abk_commit")"
+    printf '\t.android_version = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_ANDROID_VERSION:-}")"
+    printf '\t.kernel_version = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_KERNEL_VERSION:-}")"
+    printf '\t.sub_level = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_SUB_LEVEL:-}")"
+    printf '\t.os_patch_level = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_OS_PATCH_LEVEL:-}")"
+    printf '\t.revision = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_REVISION:-}")"
+    printf '\t.kernelsu_variant = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_KSU_VARIANT:-}")"
+    printf '\t.kernelsu_branch = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_KSU_BRANCH:-}")"
+    printf '\t.version = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_VERSION:-}")"
+    printf '\t.build_time = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_TIME:-}")"
+    printf '\t.virtualization_support = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_VIRTUALIZATION_SUPPORT:-}")"
+    printf '\t.zram_extra_algos = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_ZRAM_EXTRA_ALGOS:-}")"
+    printf '\t.features = {\n'
+    printf '\t\t.use_zram = %s,\n' "$(abk_control_bool_literal "${ABK_FEATURE_USE_ZRAM:-false}")"
+    printf '\t\t.use_bbg = %s,\n' "$(abk_control_bool_literal "${ABK_FEATURE_USE_BBG:-false}")"
+    printf '\t\t.use_ddk = %s,\n' "$(abk_control_bool_literal "${ABK_FEATURE_USE_DDK:-false}")"
+    printf '\t\t.use_ntsync = %s,\n' "$(abk_control_bool_literal "${ABK_FEATURE_USE_NTSYNC:-false}")"
+    printf '\t\t.use_networking = %s,\n' "$(abk_control_bool_literal "${ABK_FEATURE_USE_NETWORKING:-false}")"
+    printf '\t\t.use_kpm = %s,\n' "$(abk_control_bool_literal "${ABK_FEATURE_USE_KPM:-false}")"
+    printf '\t\t.use_rekernel = %s,\n' "$(abk_control_bool_literal "${ABK_FEATURE_USE_REKERNEL:-false}")"
+    printf '\t\t.enable_susfs = %s,\n' "$(abk_control_bool_literal "${ABK_FEATURE_ENABLE_SUSFS:-false}")"
+    printf '\t\t.supp_op = %s,\n' "$(abk_control_bool_literal "${ABK_FEATURE_SUPP_OP:-false}")"
+    printf '\t\t.zram_full_algo = %s,\n' "$(abk_control_bool_literal "${ABK_FEATURE_ZRAM_FULL_ALGO:-false}")"
+    printf '\t},\n'
+    printf '};\n'
+  } >> "$output_file"
+}
+
 abk_control_record_manifest_entry() {
   local records_file="$1"
   local id="$2"
@@ -245,6 +319,7 @@ abk_control_generate_manifest_source() {
     printf '};\n\n'
     printf 'const size_t abk_control_manifest_count = %s;\n' "$entry_count"
   } > "$tmp_output"
+  abk_control_emit_build_info "$tmp_output"
 
   mv "$tmp_output" "$output"
   rm -f "$records_file" "$entries_file"

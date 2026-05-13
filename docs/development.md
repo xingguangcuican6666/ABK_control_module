@@ -17,6 +17,8 @@ stage. This module supports `after_patch` and `before_build`.
 - Reads `CUSTOM_EXTERNAL_MODULES_MANIFEST`.
 - Parses each module repository's `module.conf`.
 - Generates `common/drivers/abk_control/abk_control_manifest.c`.
+- Embeds ABK workflow build parameters from `ABK_BUILD_*` and `ABK_FEATURE_*`
+  environment variables.
 - Enables `CONFIG_ABK_CONTROL=y` in `$DEFCONFIG`.
 
 All edits are idempotent.
@@ -34,6 +36,24 @@ The generator reads these fields from `module.conf`:
 
 Invalid or missing metadata is skipped with a warning so one bad module does not
 break the whole manifest.
+
+## Build Info
+
+The generated manifest exports schema 2 runtime build information:
+
+- `ABK_BUILD_ANDROID_VERSION`, `ABK_BUILD_KERNEL_VERSION`,
+  `ABK_BUILD_SUB_LEVEL`, `ABK_BUILD_OS_PATCH_LEVEL`
+- `ABK_BUILD_REVISION`, `ABK_BUILD_KSU_VARIANT`, `ABK_BUILD_KSU_BRANCH`,
+  `ABK_BUILD_VERSION`, `ABK_BUILD_TIME`
+- `ABK_BUILD_VIRTUALIZATION_SUPPORT`, `ABK_BUILD_ZRAM_EXTRA_ALGOS`
+- `ABK_FEATURE_USE_ZRAM`, `ABK_FEATURE_USE_BBG`, `ABK_FEATURE_USE_DDK`,
+  `ABK_FEATURE_USE_NTSYNC`, `ABK_FEATURE_USE_NETWORKING`,
+  `ABK_FEATURE_USE_KPM`, `ABK_FEATURE_USE_REKERNEL`,
+  `ABK_FEATURE_ENABLE_SUSFS`, `ABK_FEATURE_SUPP_OP`,
+  `ABK_FEATURE_ZRAM_FULL_ALGO`
+
+The ABK app version is parsed from `$ZZH_PATCHES/app/build.gradle.kts` when
+available. The ABK commit is read from the same repository with `git rev-parse`.
 
 ## Control API
 

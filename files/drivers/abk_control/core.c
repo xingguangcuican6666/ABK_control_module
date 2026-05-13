@@ -162,6 +162,164 @@ static int abk_control_buf_append_json_string(struct abk_control_buffer *buf,
 	return abk_control_buf_append(buf, "\"");
 }
 
+static int abk_control_buf_append_json_field(struct abk_control_buffer *buf,
+					     const char *name,
+					     const char *value,
+					     bool trailing_comma)
+{
+	int ret;
+
+	ret = abk_control_buf_appendf(buf, "    \"%s\": ", name);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_string(buf, value);
+	if (ret)
+		return ret;
+	return abk_control_buf_append(buf, trailing_comma ? ",\n" : "\n");
+}
+
+static int abk_control_buf_append_json_bool_field(struct abk_control_buffer *buf,
+						  const char *name,
+						  bool value,
+						  bool trailing_comma)
+{
+	int ret;
+
+	ret = abk_control_buf_appendf(buf, "      \"%s\": %s", name,
+				     value ? "true" : "false");
+	if (ret)
+		return ret;
+	return abk_control_buf_append(buf, trailing_comma ? ",\n" : "\n");
+}
+
+static int abk_control_append_build_info(struct abk_control_buffer *buf)
+{
+	int ret;
+
+	ret = abk_control_buf_append_json_field(buf, "abk_version",
+					       abk_control_build.abk_version,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "abk_commit",
+					       abk_control_build.abk_commit,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append(buf, "  \"build\": {\n");
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "android_version",
+					       abk_control_build.android_version,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "kernel_version",
+					       abk_control_build.kernel_version,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "sub_level",
+					       abk_control_build.sub_level,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "os_patch_level",
+					       abk_control_build.os_patch_level,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "revision",
+					       abk_control_build.revision,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "kernelsu_variant",
+					       abk_control_build.kernelsu_variant,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "kernelsu_branch",
+					       abk_control_build.kernelsu_branch,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "version",
+					       abk_control_build.version,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "build_time",
+					       abk_control_build.build_time,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "virtualization_support",
+					       abk_control_build.virtualization_support,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "zram_extra_algos",
+					       abk_control_build.zram_extra_algos,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append(buf, "    \"features\": {\n");
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_bool_field(buf, "use_zram",
+						    abk_control_build.features.use_zram,
+						    true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_bool_field(buf, "use_bbg",
+						    abk_control_build.features.use_bbg,
+						    true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_bool_field(buf, "use_ddk",
+						    abk_control_build.features.use_ddk,
+						    true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_bool_field(buf, "use_ntsync",
+						    abk_control_build.features.use_ntsync,
+						    true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_bool_field(buf, "use_networking",
+						    abk_control_build.features.use_networking,
+						    true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_bool_field(buf, "use_kpm",
+						    abk_control_build.features.use_kpm,
+						    true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_bool_field(buf, "use_rekernel",
+						    abk_control_build.features.use_rekernel,
+						    true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_bool_field(buf, "enable_susfs",
+						    abk_control_build.features.enable_susfs,
+						    true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_bool_field(buf, "supp_op",
+						    abk_control_build.features.supp_op,
+						    true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_bool_field(buf, "zram_full_algo",
+						    abk_control_build.features.zram_full_algo,
+						    false);
+	if (ret)
+		return ret;
+	return abk_control_buf_append(buf, "    }\n  },\n");
+}
+
 static const struct abk_control_ops *abk_control_find_locked(const char *id)
 {
 	struct abk_control_registration *registration;
@@ -250,7 +408,13 @@ static int abk_control_build_status(char **out, size_t *out_len)
 	size_t i;
 	int ret;
 
-	ret = abk_control_buf_append(&buf, "{\n  \"schema\": 1,\n  \"modules\": [");
+	ret = abk_control_buf_append(&buf, "{\n  \"schema\": 2,\n");
+	if (ret)
+		goto err;
+	ret = abk_control_append_build_info(&buf);
+	if (ret)
+		goto err;
+	ret = abk_control_buf_append(&buf, "  \"modules\": [");
 	if (ret)
 		goto err;
 

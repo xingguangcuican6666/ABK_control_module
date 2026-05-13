@@ -42,6 +42,27 @@ make_module "$TMP_DIR/mod_beta" "beta_feature" "Beta Feature" "2.0" "beta \"quot
 
 export KERNEL_ROOT DEFCONFIG CUSTOM_EXTERNAL_MODULES_MANIFEST
 export CONFIG="android15-6.6-test"
+export ABK_BUILD_ANDROID_VERSION="android15"
+export ABK_BUILD_KERNEL_VERSION="6.6"
+export ABK_BUILD_SUB_LEVEL="test"
+export ABK_BUILD_OS_PATCH_LEVEL="2025-01"
+export ABK_BUILD_REVISION="r1"
+export ABK_BUILD_KSU_VARIANT="SukiSU"
+export ABK_BUILD_KSU_BRANCH="Stable(标准)"
+export ABK_BUILD_VERSION="ABK-test"
+export ABK_BUILD_TIME="Wed May 13 14:00:00 CST 2026"
+export ABK_BUILD_VIRTUALIZATION_SUPPORT="678"
+export ABK_BUILD_ZRAM_EXTRA_ALGOS="lz4,zstd"
+export ABK_FEATURE_USE_ZRAM="true"
+export ABK_FEATURE_USE_BBG="false"
+export ABK_FEATURE_USE_DDK="true"
+export ABK_FEATURE_USE_NTSYNC="true"
+export ABK_FEATURE_USE_NETWORKING="false"
+export ABK_FEATURE_USE_KPM="true"
+export ABK_FEATURE_USE_REKERNEL="false"
+export ABK_FEATURE_ENABLE_SUSFS="true"
+export ABK_FEATURE_SUPP_OP="false"
+export ABK_FEATURE_ZRAM_FULL_ALGO="true"
 
 (
   cd "$REPO_ROOT"
@@ -86,5 +107,15 @@ grep -qF '.id = "alpha_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_co
 grep -qF '.id = "beta_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.description = "beta \"quoted\" metadata"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF 'const size_t abk_control_manifest_count = 3;' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF 'const struct abk_control_build_info abk_control_build = {' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.android_version = "android15"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.kernel_version = "6.6"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.os_patch_level = "2025-01"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.kernelsu_variant = "SukiSU"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.virtualization_support = "678"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.zram_extra_algos = "lz4,zstd"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.use_zram = true' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.use_bbg = false' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.enable_susfs = true' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 
 printf 'abk_control_setup_test passed\n'

@@ -21,8 +21,8 @@ https://github.com/xingguangcuican6666/ABK_control_module.git;after_patch|https:
 ```
 
 The `after_patch` stage installs the kernel source files. The `before_build`
-stage installs the files again for safety, generates the metadata manifest, and
-enables `CONFIG_ABK_CONTROL=y`.
+stage installs the files again for safety, generates the metadata and build
+manifest, and enables `CONFIG_ABK_CONTROL=y`.
 
 ## Device Interface
 
@@ -36,7 +36,34 @@ The device returns JSON:
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
+  "abk_version": "1.0.6",
+  "abk_commit": "abcdef0",
+  "build": {
+    "android_version": "android15",
+    "kernel_version": "6.6",
+    "sub_level": "127",
+    "os_patch_level": "2025-01",
+    "revision": "",
+    "kernelsu_variant": "SukiSU",
+    "kernelsu_branch": "Stable(标准)",
+    "version": "",
+    "build_time": "Wed May 13 14:00:00 CST 2026",
+    "virtualization_support": "678",
+    "zram_extra_algos": "lz4,zstd",
+    "features": {
+      "use_zram": true,
+      "use_bbg": true,
+      "use_ddk": false,
+      "use_ntsync": true,
+      "use_networking": true,
+      "use_kpm": true,
+      "use_rekernel": false,
+      "enable_susfs": true,
+      "supp_op": false,
+      "zram_full_algo": false
+    }
+  },
   "modules": [
     {
       "id": "abk_control",
