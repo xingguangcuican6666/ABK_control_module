@@ -44,6 +44,10 @@ abk_control_install_kernel_files() {
   abk_append_line_once "$common_dir/drivers/Makefile" 'obj-$(CONFIG_ABK_CONTROL) += abk_control/'
 }
 
+abk_control_patch_ksu_bridge() {
+  MODULE_DIR="$MODULE_DIR" python3 "$MODULE_DIR/scripts/abk_control_ksu_patch.py"
+}
+
 abk_control_conf_value() {
   local file="$1"
   local key="$2"
@@ -328,4 +332,8 @@ abk_control_generate_manifest_source() {
 
 abk_control_enable_config() {
   abk_enable_config CONFIG_ABK_CONTROL
+}
+
+abk_control_validate_kernel_bridge() {
+  abk_control_patch_ksu_bridge
 }

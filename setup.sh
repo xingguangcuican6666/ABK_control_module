@@ -25,6 +25,7 @@ case "$CUSTOM_EXTERNAL_MODULE_STAGE" in
   after_patch)
     abk_log "after_patch: installing ABK control kernel sources"
     abk_control_install_kernel_files
+    abk_control_patch_ksu_bridge
     ;;
 
   before_build)
@@ -32,6 +33,7 @@ case "$CUSTOM_EXTERNAL_MODULE_STAGE" in
     abk_control_install_kernel_files
     abk_control_generate_manifest_source
     abk_control_enable_config
+    abk_control_validate_kernel_bridge
     ;;
 
   *)

@@ -14,6 +14,212 @@ printf 'menu "Device Drivers"\nendmenu\n' > "$KERNEL_ROOT/common/drivers/Kconfig
 printf '# drivers makefile\n' > "$KERNEL_ROOT/common/drivers/Makefile"
 printf '# defconfig\n' > "$DEFCONFIG"
 
+make_dispatch_fixture() {
+  local dir="$1"
+
+  mkdir -p "$dir/supercall"
+  cat > "$dir/supercall/dispatch.c" <<'EOF_DISPATCH'
+#include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/version.h>
+
+#include "manager/manager_identity.h"
+
+static int do_get_info(void __user *arg)
+{
+    struct ksu_get_info_cmd cmd = { .version = KERNEL_SU_VERSION, .flags = 0 };
+
+    if (is_manager()) {
+        cmd.flags |= KSU_GET_INFO_FLAG_MANAGER;
+    }
+
+    return 0;
+}
+
+static int do_grant_root(void __user *arg)
+{
+    return 0;
+}
+
+// IOCTL handlers mapping table
+static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
+    {
+        .cmd = KSU_IOCTL_GET_INFO,
+        .name = "GET_INFO",
+        .handler = do_get_info,
+        .perm_check = always_allow
+    },
+    {
+        .cmd = 0,
+        .name = NULL,
+        .handler = NULL,
+        .perm_check = NULL
+    },
+};
+
+long ksu_supercall_handle_ioctl(unsigned int cmd, void __user *argp)
+{
+    return 0;
+}
+EOF_DISPATCH
+}
+
+make_single_ksu_fixture() {
+  local dir="$1"
+
+  mkdir -p "$dir/manager"
+  printf 'kernelsu-objs += manager/apk_sign.o\n' > "$dir/Kbuild"
+  cat > "$dir/manager/apk_sign.c" <<'EOF_APK'
+bool is_manager_apk(char *path)
+{
+#ifdef KSU_MANAGER_PACKAGE
+    char pkg[KSU_MAX_PACKAGE_NAME];
+    if (get_pkg_from_apk_path(pkg, path) < 0) {
+        pr_err("Failed to get package name from apk path: %s\n", path);
+        return false;
+    }
+
+    // pkg is `<real package>`
+    if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {
+        return false;
+    }
+#endif
+    if (check_v2_signature(path, EXPECTED_SIZE, EXPECTED_HASH)) {
+        return true;
+    }
+#ifdef EXPECTED_SIZE2
+    return check_v2_signature(path, EXPECTED_SIZE2, EXPECTED_HASH2);
+#else
+    return false;
+#endif
+}
+EOF_APK
+  cat > "$dir/manager/throne_tracker.h" <<'EOF_SINGLE_HEADER'
+#ifndef __KSU_H_UID_OBSERVER
+#define __KSU_H_UID_OBSERVER
+
+#ifdef CONFIG_KSU_DISABLE_MANAGER
+static inline void ksu_throne_tracker_init()
+{
+}
+static inline void ksu_throne_tracker_exit()
+{
+}
+static inline void track_throne(bool prune_only)
+{
+    (void)prune_only;
+}
+#else
+void ksu_throne_tracker_init();
+void ksu_throne_tracker_exit();
+void track_throne(bool prune_only);
+#endif
+
+#endif
+EOF_SINGLE_HEADER
+  cat > "$dir/manager/throne_tracker.c" <<'EOF_SINGLE_TRACKER'
+#define SYSTEM_PACKAGES_LIST_PATH "/data/system/packages.list"
+
+static void crown_manager(const char *apk, struct list_head *uid_data)
+{
+    char pkg[KSU_MAX_PACKAGE_NAME];
+    if (get_pkg_from_apk_path(pkg, apk) < 0) {
+        return;
+    }
+
+    pr_info("manager pkg: %s\n", pkg);
+
+    ksu_set_manager_appid(10000);
+}
+
+void search_manager(void)
+{
+            if (is_manager) {
+                crown_manager(dirpath, my_ctx->private_data);
+                *my_ctx->stop = 1;
+
+                // Manager found, clear APK cache list
+                list_for_each_entry_safe (pos, n, &apk_path_hash_list, list) {
+                    list_del(&pos->list);
+                    kfree(pos);
+                }
+            } else {
+            }
+}
+
+void track_throne(bool prune_only)
+{
+}
+
+void __init ksu_throne_tracker_init()
+{
+}
+EOF_SINGLE_TRACKER
+  make_dispatch_fixture "$dir"
+}
+
+make_resukisu_fixture() {
+  local dir="$1"
+
+  mkdir -p "$dir/manager"
+  printf 'kernelsu-objs += manager/apk_sign.o\n' > "$dir/Kbuild"
+  cat > "$dir/manager/apk_sign.c" <<'EOF_RE_APK'
+static apk_sign_key_t apk_sign_keys[] = {
+    { EXPECTED_SIZE_RESUKISU, EXPECTED_HASH_RESUKISU },
+};
+
+bool is_manager_apk(char *path, u8 *signature_index)
+{
+#ifdef KSU_MANAGER_PACKAGE
+    char pkg[KSU_MAX_PACKAGE_NAME];
+    if (get_pkg_from_apk_path(pkg, path) < 0) {
+        return false;
+    }
+
+    if (strncmp(pkg, KSU_MANAGER_PACKAGE, sizeof(KSU_MANAGER_PACKAGE))) {
+        return false;
+    }
+#endif
+    return check_v2_signature(path, signature_index);
+}
+EOF_RE_APK
+  cat > "$dir/manager/throne_tracker.h" <<'EOF_RE_HEADER'
+#ifndef __KSU_H_THRONE_TRACKER
+#define __KSU_H_THRONE_TRACKER
+
+#define TRACK_THRONE_PRUNE_ONLY (1 << 0)
+#define TRACK_THRONE_FORCE_SEARCH_MGR (1 << 1)
+
+#ifdef CONFIG_KSU_DISABLE_MANAGER
+static inline void track_throne(unsigned int flags)
+{
+}
+#else
+void track_throne(unsigned int flags);
+#endif
+
+#endif
+EOF_RE_HEADER
+  cat > "$dir/manager/throne_tracker.c" <<'EOF_RE_TRACKER'
+struct track_throne_struct {
+    unsigned int flags;
+};
+
+void do_track_throne(void *data)
+{
+}
+
+void track_throne(unsigned int flags)
+{
+}
+EOF_RE_TRACKER
+  make_dispatch_fixture "$dir"
+}
+
+make_single_ksu_fixture "$KERNEL_ROOT/KernelSU/kernel"
+make_single_ksu_fixture "$KERNEL_ROOT/drivers/kernelsu"
+make_resukisu_fixture "$KERNEL_ROOT/common/drivers/kernelsu"
+
 make_module() {
   local dir="$1"
   local id="$2"
@@ -102,7 +308,7 @@ assert_count 1 'obj-$(CONFIG_ABK_CONTROL) += abk_control/' "$KERNEL_ROOT/common/
 assert_count 1 'CONFIG_ABK_CONTROL=y' "$DEFCONFIG"
 
 grep -qF '.id = "abk_control"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
-grep -qF '.version = "0.4.0"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.version = "0.5.0"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.stage = "after_patch,before_build"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.id = "alpha_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.id = "beta_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
@@ -128,6 +334,14 @@ grep -qF 'ABK_CONTROL_IOCTL_GET_STATUS' "$KERNEL_ROOT/common/include/linux/abk_c
 grep -qF 'ABK_CONTROL_IOCTL_RUN_COMMAND' "$KERNEL_ROOT/common/include/linux/abk_control.h"
 grep -qF 'EXPORT_SYMBOL_GPL(abk_control_get_status_json);' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF 'EXPORT_SYMBOL_GPL(abk_control_run_command);' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/KernelSU/kernel/Kbuild"
+grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/KernelSU/kernel/manager/apk_sign.c"
+grep -qF 'abk_try_register_manager' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
+grep -qF 'ABK_CONTROL_IOCTL_GET_STATUS' "$KERNEL_ROOT/KernelSU/kernel/supercall/dispatch.c"
+grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/drivers/kernelsu/manager/apk_sign.c"
+grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/common/drivers/kernelsu/manager/apk_sign.c"
+grep -qF 'TRACK_THRONE_FORCE_SEARCH_MGR' "$KERNEL_ROOT/common/drivers/kernelsu/manager/throne_tracker.c"
+grep -qF 'ABK_CONTROL_IOCTL_GET_STATUS' "$KERNEL_ROOT/common/drivers/kernelsu/supercall/dispatch.c"
 if grep -qF 'misc_register' "$KERNEL_ROOT/common/drivers/abk_control/core.c"; then
   echo "abk_control must not create a user-visible misc device" >&2
   exit 1
