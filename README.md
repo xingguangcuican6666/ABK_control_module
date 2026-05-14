@@ -24,6 +24,25 @@ The `after_patch` stage installs the kernel source files. The `before_build`
 stage installs the files again for safety, generates the metadata and build
 manifest, and enables `CONFIG_ABK_CONTROL=y`.
 
+## Manager Identity
+
+The module also patches KernelSU / SukiSU / ReSukiSU manager recognition so the
+ABK app can act as the native manager. By default it trusts:
+
+- package: `com.abk.kernel`
+- certificate size: `1407`
+- certificate SHA-256: `34e5e843952277759603cd0f949770b24c868530d80d7baeff08776a7e132b16`
+
+ABK GitHub Actions exports `ABK_MANAGER_PACKAGE`, `ABK_MANAGER_CERT_SIZE`, and
+`ABK_MANAGER_CERT_SHA256` before running external modules. Those environment
+variables override `module.conf`, so forks can use their own release signing
+certificate metadata without editing this module.
+
+The APK installed on the phone must match the package and certificate hash that
+were injected into the kernel. Default debug or locally ad-hoc signed APKs will
+not be recognized as the manager unless their certificate metadata is passed to
+the kernel build.
+
 ## Runtime Status
 
 After booting a kernel built with this module, the runtime bridge returns JSON:
