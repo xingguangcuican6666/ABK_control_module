@@ -43,6 +43,11 @@ were injected into the kernel. Default debug or locally ad-hoc signed APKs will
 not be recognized as the manager unless their certificate metadata is passed to
 the kernel build.
 
+Some KernelSU manager checkers reject certificates larger than their historical
+1024-byte buffer before comparing the hash. The ABK release certificate is 1407
+bytes, so this module also raises the in-kernel manager certificate read limit to
+2048 bytes when the ABK manager bridge is enabled.
+
 ## Runtime Status
 
 After booting a kernel built with this module, the runtime bridge returns JSON:

@@ -70,6 +70,8 @@ make_single_ksu_fixture() {
   mkdir -p "$dir/manager"
   printf 'kernelsu-objs += manager/apk_sign.o\n' > "$dir/Kbuild"
   cat > "$dir/manager/apk_sign.c" <<'EOF_APK'
+#define CERT_MAX_LENGTH 1024
+
 bool is_manager_apk(char *path)
 {
 #ifdef KSU_MANAGER_PACKAGE
@@ -164,6 +166,8 @@ make_resukisu_fixture() {
   mkdir -p "$dir/manager"
   printf 'kernelsu-objs += manager/apk_sign.o\n' > "$dir/Kbuild"
   cat > "$dir/manager/apk_sign.c" <<'EOF_RE_APK'
+#define CERT_MAX_LENGTH 1024
+
 static apk_sign_key_t apk_sign_keys[] = {
     { EXPECTED_SIZE_RESUKISU, EXPECTED_HASH_RESUKISU },
 };
@@ -341,11 +345,15 @@ grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/KernelSU/kernel/Kbuild"
 grep -qF 'com.example.abk' "$KERNEL_ROOT/KernelSU/kernel/Kbuild"
 grep -qF '1234' "$KERNEL_ROOT/KernelSU/kernel/Kbuild"
 grep -qF '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' "$KERNEL_ROOT/KernelSU/kernel/Kbuild"
+grep -qF 'ABK_MANAGER_CERT_MAX_LENGTH=2048' "$KERNEL_ROOT/KernelSU/kernel/Kbuild"
 grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/KernelSU/kernel/manager/apk_sign.c"
+grep -qF '#define CERT_MAX_LENGTH ABK_MANAGER_CERT_MAX_LENGTH' "$KERNEL_ROOT/KernelSU/kernel/manager/apk_sign.c"
 grep -qF 'abk_try_register_manager' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
 grep -qF 'ABK_CONTROL_IOCTL_GET_STATUS' "$KERNEL_ROOT/KernelSU/kernel/supercall/dispatch.c"
 grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/drivers/kernelsu/manager/apk_sign.c"
+grep -qF '#define CERT_MAX_LENGTH ABK_MANAGER_CERT_MAX_LENGTH' "$KERNEL_ROOT/drivers/kernelsu/manager/apk_sign.c"
 grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/common/drivers/kernelsu/manager/apk_sign.c"
+grep -qF '#define CERT_MAX_LENGTH ABK_MANAGER_CERT_MAX_LENGTH' "$KERNEL_ROOT/common/drivers/kernelsu/manager/apk_sign.c"
 grep -qF 'TRACK_THRONE_FORCE_SEARCH_MGR' "$KERNEL_ROOT/common/drivers/kernelsu/manager/throne_tracker.c"
 grep -qF 'ABK_CONTROL_IOCTL_GET_STATUS' "$KERNEL_ROOT/common/drivers/kernelsu/supercall/dispatch.c"
 if grep -qF 'misc_register' "$KERNEL_ROOT/common/drivers/abk_control/core.c"; then

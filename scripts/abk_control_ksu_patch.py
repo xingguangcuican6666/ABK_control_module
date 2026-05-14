@@ -7,6 +7,7 @@ from pathlib import Path
 DEFAULT_MANAGER_PACKAGE = "com.abk.kernel"
 DEFAULT_MANAGER_CERT_SIZE = "1407"
 DEFAULT_MANAGER_CERT_SHA256 = "34e5e843952277759603cd0f949770b24c868530d80d7baeff08776a7e132b16"
+DEFAULT_MANAGER_CERT_MAX_LENGTH = "2048"
 
 
 def read_env_file(path: Path) -> dict[str, str]:
@@ -41,7 +42,17 @@ def kernel_root() -> Path:
     return Path(root).resolve()
 
 
-def manager_identity() -> tuple[str, str, str]:
+def manager_cert_max_length(cert_size: str) -> str:
+    size = int(cert_size, 0)
+    if size <= 0 or size > 8192:
+        raise SystemExit("ABK manager certificate size is outside supported range")
+    for candidate in (1024, 2048, 4096, 8192):
+        if size <= candidate:
+            return str(max(candidate, int(DEFAULT_MANAGER_CERT_MAX_LENGTH)))
+    return "8192"
+
+
+def manager_identity() -> tuple[str, str, str, str]:
     conf = read_env_file(module_dir() / "module.conf")
     package = (
         os.environ.get("ABK_MANAGER_PACKAGE")
@@ -65,7 +76,8 @@ def manager_identity() -> tuple[str, str, str]:
         raise SystemExit("ABK manager certificate size is invalid")
     if not re.fullmatch(r"[0-9a-f]{64}", cert_hash):
         raise SystemExit("ABK manager certificate SHA-256 is invalid")
-    return package, cert_size, cert_hash
+    cert_max_length = manager_cert_max_length(cert_size)
+    return package, cert_size, cert_hash, cert_max_length
 
 
 def find_ksu_dirs(root: Path) -> list[Path]:
@@ -99,22 +111,57 @@ def find_ksu_dirs(root: Path) -> list[Path]:
     return dirs
 
 
-def ensure_kbuild_macros(ksu_dir: Path, package: str, cert_size: str, cert_hash: str) -> None:
+def ensure_kbuild_macros(ksu_dir: Path, package: str, cert_size: str, cert_hash: str, cert_max_length: str) -> None:
     path = ksu_dir / "Kbuild"
     text = path.read_text(errors="ignore")
-    if "ABK_MANAGER_OFFICIAL_CERT" in text:
-        return
+    filtered_lines = []
+    for line in text.splitlines():
+        if "ABK Control: trust the official ABK manager release certificate." in line:
+            continue
+        if re.search(r"\bABK_MANAGER_(PACKAGE|CERT_SIZE|CERT_SHA256|CERT_MAX_LENGTH|OFFICIAL_CERT)\b", line):
+            continue
+        filtered_lines.append(line)
     block = "\n".join([
         "",
         "# ABK Control: trust the official ABK manager release certificate.",
         f"ccflags-y += -DABK_MANAGER_PACKAGE=\\\"{package}\\\"",
         f"ccflags-y += -DABK_MANAGER_CERT_SIZE={cert_size}",
         f"ccflags-y += -DABK_MANAGER_CERT_SHA256=\\\"{cert_hash}\\\"",
+        f"ccflags-y += -DABK_MANAGER_CERT_MAX_LENGTH={cert_max_length}",
         "ccflags-y += -DABK_MANAGER_OFFICIAL_CERT=1",
         "",
     ])
-    path.write_text(text.rstrip() + "\n" + block)
-    print(f"ABK Control: configured manager identity macros in {path}")
+    new_text = "\n".join(filtered_lines).rstrip() + "\n" + block
+    if write_if_changed(path, new_text):
+        print(f"ABK Control: configured manager identity macros in {path}")
+
+
+CERT_MAX_PATTERN = re.compile(
+    r"(?P<indent>[ \t]*)#[ \t]*define[ \t]+CERT_MAX_LENGTH[ \t]+(?P<value>0x[0-9a-fA-F]+|[0-9]+)"
+)
+
+
+def patch_cert_max_length(text: str, path: Path) -> tuple[str, bool]:
+    if "ABK_MANAGER_CERT_MAX_LENGTH" in text:
+        return text, False
+
+    def replacement(match: re.Match[str]) -> str:
+        indent = match.group("indent")
+        value = match.group("value")
+        return "\n".join([
+            f"{indent}#ifdef ABK_MANAGER_OFFICIAL_CERT",
+            f"{indent}#define CERT_MAX_LENGTH ABK_MANAGER_CERT_MAX_LENGTH",
+            f"{indent}#else",
+            f"{indent}#define CERT_MAX_LENGTH {value}",
+            f"{indent}#endif",
+        ])
+
+    text, count = CERT_MAX_PATTERN.subn(replacement, text, count=1)
+    if count:
+        return text, True
+    if "CERT_MAX_LENGTH" in text:
+        raise SystemExit(f"{path} contains CERT_MAX_LENGTH but no supported define")
+    return text, False
 
 
 PACKAGE_GATE_PATTERN = re.compile(
@@ -147,6 +194,9 @@ def patch_apk_sign(ksu_dir: Path) -> None:
         raise SystemExit(f"{path} does not contain is_manager_apk")
 
     changed = False
+    text, cert_max_changed = patch_cert_max_length(text, path)
+    changed = changed or cert_max_changed
+
     if "ABK_MANAGER_PACKAGE" not in text:
         text, count = PACKAGE_GATE_PATTERN.subn(package_gate_replacement, text, count=1)
         changed = changed or bool(count)
@@ -484,8 +534,13 @@ static int do_abk_control_run_command(void __user *arg)
 
 def validate_ksu_dir(ksu_dir: Path, require_control_bridge: bool) -> None:
     required = {
-        ksu_dir / "Kbuild": ["ABK_MANAGER_PACKAGE", "ABK_MANAGER_CERT_SHA256", "ABK_MANAGER_OFFICIAL_CERT"],
-        ksu_dir / "manager/apk_sign.c": ["ABK_MANAGER_CERT_SHA256"],
+        ksu_dir / "Kbuild": [
+            "ABK_MANAGER_PACKAGE",
+            "ABK_MANAGER_CERT_SHA256",
+            "ABK_MANAGER_CERT_MAX_LENGTH",
+            "ABK_MANAGER_OFFICIAL_CERT",
+        ],
+        ksu_dir / "manager/apk_sign.c": ["ABK_MANAGER_CERT_SHA256", "ABK_MANAGER_CERT_MAX_LENGTH"],
         ksu_dir / "manager/throne_tracker.h": ["abk_try_register_manager"],
         ksu_dir / "manager/throne_tracker.c": ["abk_try_register_manager"],
         ksu_dir / "supercall/dispatch.c": ["abk_try_register_manager", "KSU_GET_INFO_FLAG_MANAGER"],
@@ -502,7 +557,7 @@ def validate_ksu_dir(ksu_dir: Path, require_control_bridge: bool) -> None:
 
 def main() -> None:
     root = kernel_root()
-    package, cert_size, cert_hash = manager_identity()
+    package, cert_size, cert_hash, cert_max_length = manager_identity()
     ksu_dirs = find_ksu_dirs(root)
     if not ksu_dirs:
         print("ABK Control: no KernelSU source directory found, skip manager bridge")
@@ -512,9 +567,10 @@ def main() -> None:
     print(f"ABK Control: manager package {package}")
     print(f"ABK Control: manager cert size {cert_size}")
     print(f"ABK Control: manager cert sha256 {cert_hash}")
+    print(f"ABK Control: manager cert max length {cert_max_length}")
     for ksu_dir in ksu_dirs:
         print(f"ABK Control: patching KSU source {ksu_dir}")
-        ensure_kbuild_macros(ksu_dir, package, cert_size, cert_hash)
+        ensure_kbuild_macros(ksu_dir, package, cert_size, cert_hash, cert_max_length)
         patch_apk_sign(ksu_dir)
         patch_throne_header(ksu_dir)
         patch_tracker(ksu_dir)
