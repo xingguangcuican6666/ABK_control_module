@@ -67,7 +67,7 @@ EOF_DISPATCH
 make_single_ksu_fixture() {
   local dir="$1"
 
-  mkdir -p "$dir/manager"
+  mkdir -p "$dir/manager" "$dir/policy"
   printf 'kernelsu-objs += manager/apk_sign.o\n' > "$dir/Kbuild"
   cat > "$dir/manager/apk_sign.c" <<'EOF_APK'
 #define CERT_MAX_LENGTH 1024
@@ -96,6 +96,81 @@ bool is_manager_apk(char *path)
 #endif
 }
 EOF_APK
+  cat > "$dir/manager/manager_identity.h" <<'EOF_SINGLE_IDENTITY'
+#ifndef __KSU_H_MANAGER_IDENTITY
+#define __KSU_H_MANAGER_IDENTITY
+
+#include <linux/cred.h>
+#include <linux/types.h>
+
+#define KSU_INVALID_APPID -1
+#define KSU_PER_USER_RANGE 100000
+
+#ifdef CONFIG_KSU_DISABLE_MANAGER
+static inline bool ksu_is_manager_appid_valid()
+{
+    return true;
+}
+
+static inline bool is_manager()
+{
+    return current_uid().val == 0;
+}
+
+static inline bool is_uid_manager(uid_t uid)
+{
+    return uid == 0;
+}
+
+static inline uid_t ksu_get_manager_appid()
+{
+    return 0;
+}
+
+static inline void ksu_set_manager_appid(uid_t appid)
+{
+    (void)appid;
+}
+
+static inline void ksu_invalidate_manager_uid()
+{
+}
+#else
+extern uid_t ksu_manager_appid; // DO NOT DIRECT USE
+
+static inline bool ksu_is_manager_appid_valid()
+{
+    return ksu_manager_appid != KSU_INVALID_APPID;
+}
+
+static inline bool is_manager()
+{
+    return unlikely(ksu_manager_appid == current_uid().val % KSU_PER_USER_RANGE);
+}
+
+static inline bool is_uid_manager(uid_t uid)
+{
+    return unlikely(ksu_manager_appid == uid % KSU_PER_USER_RANGE);
+}
+
+static inline uid_t ksu_get_manager_appid()
+{
+    return ksu_manager_appid;
+}
+
+static inline void ksu_set_manager_appid(uid_t appid)
+{
+    ksu_manager_appid = appid;
+}
+
+static inline void ksu_invalidate_manager_uid()
+{
+    ksu_manager_appid = KSU_INVALID_APPID;
+}
+#endif
+
+#endif // __KSU_H_MANAGER_IDENTITY
+EOF_SINGLE_IDENTITY
   cat > "$dir/manager/throne_tracker.h" <<'EOF_SINGLE_HEADER'
 #ifndef __KSU_H_UID_OBSERVER
 #define __KSU_H_UID_OBSERVER
@@ -122,6 +197,14 @@ EOF_SINGLE_HEADER
   cat > "$dir/manager/throne_tracker.c" <<'EOF_SINGLE_TRACKER'
 #define SYSTEM_PACKAGES_LIST_PATH "/data/system/packages.list"
 
+uid_t ksu_manager_appid = KSU_INVALID_APPID;
+
+struct uid_data {
+    struct list_head list;
+    u32 uid;
+    char package[KSU_MAX_PACKAGE_NAME];
+};
+
 static void crown_manager(const char *apk, struct list_head *uid_data)
 {
     char pkg[KSU_MAX_PACKAGE_NAME];
@@ -134,7 +217,7 @@ static void crown_manager(const char *apk, struct list_head *uid_data)
     ksu_set_manager_appid(10000);
 }
 
-void search_manager(void)
+void search_manager(const char *path, int depth, struct list_head *uid_data)
 {
             if (is_manager) {
                 crown_manager(dirpath, my_ctx->private_data);
@@ -151,12 +234,56 @@ void search_manager(void)
 
 void track_throne(bool prune_only)
 {
+    struct list_head uid_list;
+    INIT_LIST_HEAD(&uid_list);
+
+    struct uid_data *np;
+    struct uid_data *n;
+
+    if (prune_only)
+        goto prune;
+
+    // first, check if manager_uid exist!
+    bool manager_exist = false;
+    list_for_each_entry (np, &uid_list, list) {
+        if (np->uid == ksu_get_manager_appid()) {
+            manager_exist = true;
+            break;
+        }
+    }
+
+    if (!manager_exist) {
+        if (ksu_is_manager_appid_valid()) {
+            pr_info("manager is uninstalled, invalidate it!\n");
+            ksu_invalidate_manager_uid();
+            goto prune;
+        }
+        pr_info("Searching manager...\n");
+        search_manager("/data/app", 2, &uid_list);
+        pr_info("Search manager finished\n");
+    }
+
+prune:
+out:
+    list_for_each_entry_safe (np, n, &uid_list, list) {
+        list_del(&np->list);
+        kfree(np);
+    }
 }
 
 void __init ksu_throne_tracker_init()
 {
 }
 EOF_SINGLE_TRACKER
+  cat > "$dir/policy/allowlist.c" <<'EOF_SINGLE_ALLOWLIST'
+bool ksu_uid_should_umount(uid_t uid)
+{
+    if (likely(ksu_is_manager_appid_valid()) && unlikely(ksu_get_manager_appid() == uid % PER_USER_RANGE)) {
+        return false;
+    }
+    return true;
+}
+EOF_SINGLE_ALLOWLIST
   make_dispatch_fixture "$dir"
 }
 
@@ -348,10 +475,52 @@ grep -qF '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' "$KE
 grep -qF 'ABK_MANAGER_CERT_MAX_LENGTH=2048' "$KERNEL_ROOT/KernelSU/kernel/Kbuild"
 grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/KernelSU/kernel/manager/apk_sign.c"
 grep -qF '#define CERT_MAX_LENGTH ABK_MANAGER_CERT_MAX_LENGTH' "$KERNEL_ROOT/KernelSU/kernel/manager/apk_sign.c"
+grep -qF 'ABK_MANAGER_MULTI_MANAGER_BRIDGE' "$KERNEL_ROOT/KernelSU/kernel/manager/manager_identity.h"
+grep -qF 'ksu_register_manager' "$KERNEL_ROOT/KernelSU/kernel/manager/manager_identity.h"
+grep -qF 'ksu_has_manager' "$KERNEL_ROOT/KernelSU/kernel/manager/manager_identity.h"
+grep -qF 'ABK_MANAGER_MULTI_MANAGER_BRIDGE' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
+grep -qF 'abk_prune_missing_managers' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
+grep -qF 'ksu_register_manager' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
+grep -qF 'unlikely(is_uid_manager(uid))' "$KERNEL_ROOT/KernelSU/kernel/policy/allowlist.c"
 grep -qF 'abk_try_register_manager' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
+if grep -qF 'ABK Control: prefer ABK manager' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"; then
+  echo "KernelSU bridge must not prefer ABK over the official manager" >&2
+  exit 1
+fi
+if grep -qF 'bool should_stop = get_pkg_from_apk_path' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"; then
+  echo "KernelSU bridge must not stop scanning only after ABK is found" >&2
+  exit 1
+fi
+if grep -qF '*my_ctx->stop = 1;' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"; then
+  echo "KernelSU bridge must collect all trusted managers" >&2
+  exit 1
+fi
+if grep -qF 'ksu_invalidate_manager_uid();' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"; then
+  echo "KernelSU bridge must not invalidate official managers during ABK registration" >&2
+  exit 1
+fi
 grep -qF 'ABK_CONTROL_IOCTL_GET_STATUS' "$KERNEL_ROOT/KernelSU/kernel/supercall/dispatch.c"
 grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/drivers/kernelsu/manager/apk_sign.c"
 grep -qF '#define CERT_MAX_LENGTH ABK_MANAGER_CERT_MAX_LENGTH' "$KERNEL_ROOT/drivers/kernelsu/manager/apk_sign.c"
+grep -qF 'ABK_MANAGER_MULTI_MANAGER_BRIDGE' "$KERNEL_ROOT/drivers/kernelsu/manager/manager_identity.h"
+grep -qF 'abk_prune_missing_managers' "$KERNEL_ROOT/drivers/kernelsu/manager/throne_tracker.c"
+grep -qF 'unlikely(is_uid_manager(uid))' "$KERNEL_ROOT/drivers/kernelsu/policy/allowlist.c"
+if grep -qF 'ABK Control: prefer ABK manager' "$KERNEL_ROOT/drivers/kernelsu/manager/throne_tracker.c"; then
+  echo "SukiSU bridge must not prefer ABK over the official manager" >&2
+  exit 1
+fi
+if grep -qF 'bool should_stop = get_pkg_from_apk_path' "$KERNEL_ROOT/drivers/kernelsu/manager/throne_tracker.c"; then
+  echo "SukiSU bridge must not stop scanning only after ABK is found" >&2
+  exit 1
+fi
+if grep -qF '*my_ctx->stop = 1;' "$KERNEL_ROOT/drivers/kernelsu/manager/throne_tracker.c"; then
+  echo "SukiSU bridge must collect all trusted managers" >&2
+  exit 1
+fi
+if grep -qF 'ksu_invalidate_manager_uid();' "$KERNEL_ROOT/drivers/kernelsu/manager/throne_tracker.c"; then
+  echo "SukiSU bridge must not invalidate official managers during ABK registration" >&2
+  exit 1
+fi
 grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/common/drivers/kernelsu/manager/apk_sign.c"
 grep -qF '#define CERT_MAX_LENGTH ABK_MANAGER_CERT_MAX_LENGTH' "$KERNEL_ROOT/common/drivers/kernelsu/manager/apk_sign.c"
 grep -qF 'TRACK_THRONE_FORCE_SEARCH_MGR' "$KERNEL_ROOT/common/drivers/kernelsu/manager/throne_tracker.c"
