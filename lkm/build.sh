@@ -110,6 +110,7 @@ OUT_DIR="${LKM_OUT_DIR:-$DEFAULT_OUT_DIR}"
 DRY_RUN=0
 PATCH_ONLY=0
 PATCH_ABK_MANAGER="${LKM_PATCH_ABK_MANAGER:-1}"
+FRAME_WARN_KCFLAGS="${LKM_FRAME_WARN_KCFLAGS:--Wno-frame-larger-than}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -192,13 +193,13 @@ for variant in $variants; do
     cd "$build_dir"
     case "$variant" in
       kernelsu)
-        CONFIG_KSU=m CC=clang make
+        CONFIG_KSU=m CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
         ;;
       sukisu)
-        CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CC=clang make
+        CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
         ;;
       resukisu)
-        CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y CC=clang make
+        CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
         ;;
     esac
   )
