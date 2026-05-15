@@ -1,0 +1,9 @@
+[submodule "external/KernelSU"]
+	path = external/KernelSU
+	url = https://github.com/tiann/KernelSU.git
+[submodule "external/SukiSU-Ultra"]
+	path = external/SukiSU-Ultra
+	url = https://github.com/SukiSU-Ultra/SukiSU-Ultra.git
+[submodule "external/ReSukiSU"]
+	path = external/ReSukiSU
+	url = https://github.com/ReSukiSU/ReSukiSU.git

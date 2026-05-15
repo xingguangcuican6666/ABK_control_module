@@ -1,0 +1,52 @@
+name: LKM Dev Build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/lkm.yml'
+      - 'lkm/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - kernelsu
+          - sukisu
+          - resukisu
+        kmi:
+          - android12-5.10
+          - android13-5.10
+          - android13-5.15
+          - android14-5.15
+          - android14-6.1
+          - android15-6.6
+          - android16-6.12
+
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-20260313
+      options: --privileged
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build module
+        env:
+          LKM_VARIANT: ${{ matrix.variant }}
+          LKM_KMI: ${{ matrix.kmi }}
+          LKM_OUT_DIR: ${{ github.workspace }}/lkm/out
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          LKM_REPO_REF_KERNELSU=dev LKM_REPO_REF_SUKISU=dev LKM_REPO_REF_RESUKISU=dev bash lkm/build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.variant }}-${{ matrix.kmi }}-lkm
+          path: ${{ github.workspace }}/lkm/out/${{ matrix.variant }}/${{ matrix.kmi }}_kernelsu.ko
