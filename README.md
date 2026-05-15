@@ -24,6 +24,10 @@ The `after_patch` stage installs the kernel source files. The `before_build`
 stage installs the files again for safety, generates the metadata and build
 manifest, and enables `CONFIG_ABK_CONTROL=y`.
 
+KernelSU / SukiSU-Ultra / ReSukiSU LKM builds are kept separately under
+`lkm/`. That workspace builds `.ko` artifacts from the `external/*`
+submodules and does not participate in `setup.sh`.
+
 ## Manager Identity
 
 The module also patches KernelSU / SukiSU / ReSukiSU manager recognition so the
