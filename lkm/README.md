@@ -1,13 +1,14 @@
 # LKM Builds
 
 This directory keeps the standalone LKM build wrapper for the three kernel
-submodules:
+upstreams:
 
-- `external/KernelSU`
-- `external/SukiSU-Ultra`
-- `external/ReSukiSU`
+- `tiann/KernelSU`
+- `SukiSU-Ultra/SukiSU-Ultra`
+- `ReSukiSU/ReSukiSU`
 
-It does not touch `setup.sh` or the ABK module install flow.
+It clones them at build time, patches the ABK manager bridge into the cloned
+tree, and leaves `setup.sh` untouched.
 
 ## Dry run
 

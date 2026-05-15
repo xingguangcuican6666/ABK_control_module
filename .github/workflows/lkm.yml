@@ -6,8 +6,6 @@ on:
       - main
     paths:
       - '.github/workflows/lkm.yml'
-      - '.gitmodules'
-      - 'external/**'
       - 'lkm/**'
   workflow_dispatch:
 
@@ -37,9 +35,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: recursive
-          fetch-depth: 0
 
       - name: Build module
         env:

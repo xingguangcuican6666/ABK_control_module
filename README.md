@@ -25,8 +25,9 @@ stage installs the files again for safety, generates the metadata and build
 manifest, and enables `CONFIG_ABK_CONTROL=y`.
 
 KernelSU / SukiSU-Ultra / ReSukiSU LKM builds are kept separately under
-`lkm/`. That workspace builds `.ko` artifacts from the `external/*`
-submodules and does not participate in `setup.sh`.
+`lkm/`. That workspace dynamically clones the upstream sources at build time,
+patches them with the ABK manager bridge, and does not participate in
+`setup.sh`.
 
 ## Manager Identity
 
