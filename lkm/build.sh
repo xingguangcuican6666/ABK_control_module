@@ -110,7 +110,7 @@ OUT_DIR="${LKM_OUT_DIR:-$DEFAULT_OUT_DIR}"
 DRY_RUN=0
 PATCH_ONLY=0
 PATCH_ABK_MANAGER="${LKM_PATCH_ABK_MANAGER:-1}"
-FRAME_WARN_KCFLAGS="${LKM_FRAME_WARN_KCFLAGS:--Wno-frame-larger-than}"
+FRAME_WARN_KCFLAGS="${LKM_FRAME_WARN_KCFLAGS:--Wno-error=frame-larger-than}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
