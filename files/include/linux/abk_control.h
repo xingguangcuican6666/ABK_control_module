@@ -48,6 +48,7 @@ struct abk_control_build_features {
 struct abk_control_build_info {
 	const char *abk_version;
 	const char *abk_commit;
+	const char *work_mode;
 	const char *android_version;
 	const char *kernel_version;
 	const char *sub_level;

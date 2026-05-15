@@ -62,6 +62,7 @@ After booting a kernel built with this module, the runtime bridge returns JSON:
   "schema": 3,
   "abk_version": "1.0.6",
   "abk_commit": "abcdef0",
+  "work_mode": "built-in",
   "manager": {
     "display_name": "ABK Control",
     "variant": "SukiSU",

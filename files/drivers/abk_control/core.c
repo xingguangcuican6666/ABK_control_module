@@ -187,8 +187,18 @@ static int abk_control_buf_append_json_bool_field(struct abk_control_buffer *buf
 	return abk_control_buf_append(buf, trailing_comma ? ",\n" : "\n");
 }
 
+static const char *abk_control_effective_work_mode(void)
+{
+	const char *work_mode = abk_control_build.work_mode;
+
+	if (work_mode && !strcmp(work_mode, "lkm"))
+		return "lkm";
+	return "built-in";
+}
+
 static int abk_control_append_manager_info(struct abk_control_buffer *buf)
 {
+	const char *work_mode = abk_control_effective_work_mode();
 	int ret;
 
 	ret = abk_control_buf_append(buf, "  \"manager\": {\n");
@@ -214,9 +224,10 @@ static int abk_control_append_manager_info(struct abk_control_buffer *buf)
 	ret = abk_control_buf_append(buf, "    \"active\": true,\n");
 	if (ret)
 		return ret;
-	return abk_control_buf_append(buf,
-				      "    \"capabilities\": [\"build\", \"modules\", \"abk_control\"]\n"
-				      "  },\n");
+	return abk_control_buf_appendf(buf,
+				       "    \"capabilities\": [\"build\", \"modules\", \"abk_control\"%s]\n"
+				       "  },\n",
+				       !strcmp(work_mode, "lkm") ? ", \"lkm\"" : "");
 }
 
 static int abk_control_append_build_info(struct abk_control_buffer *buf)
@@ -230,6 +241,11 @@ static int abk_control_append_build_info(struct abk_control_buffer *buf)
 		return ret;
 	ret = abk_control_buf_append_json_field(buf, "abk_commit",
 					       abk_control_build.abk_commit,
+					       true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_field(buf, "work_mode",
+					       abk_control_effective_work_mode(),
 					       true);
 	if (ret)
 		return ret;

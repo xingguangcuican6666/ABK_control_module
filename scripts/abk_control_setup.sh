@@ -96,6 +96,14 @@ abk_control_bool_literal() {
   esac
 }
 
+abk_control_work_mode() {
+  case "$(printf '%s' "${ABK_BUILD_WORK_MODE:-built-in}" | tr '[:upper:]' '[:lower:]')" in
+    lkm) printf 'lkm\n' ;;
+    builtin|built-in|built_in) printf 'built-in\n' ;;
+    *) printf 'built-in\n' ;;
+  esac
+}
+
 abk_control_abk_root() {
   if [ -n "${ZZH_PATCHES:-}" ] && [ -d "$ZZH_PATCHES" ]; then
     printf '%s\n' "$ZZH_PATCHES"
@@ -136,6 +144,7 @@ abk_control_emit_build_info() {
     printf '\nconst struct abk_control_build_info abk_control_build = {\n'
     printf '\t.abk_version = "%s",\n' "$(abk_control_c_escape "$abk_version")"
     printf '\t.abk_commit = "%s",\n' "$(abk_control_c_escape "$abk_commit")"
+    printf '\t.work_mode = "%s",\n' "$(abk_control_c_escape "$(abk_control_work_mode)")"
     printf '\t.android_version = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_ANDROID_VERSION:-}")"
     printf '\t.kernel_version = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_KERNEL_VERSION:-}")"
     printf '\t.sub_level = "%s",\n' "$(abk_control_c_escape "${ABK_BUILD_SUB_LEVEL:-}")"
