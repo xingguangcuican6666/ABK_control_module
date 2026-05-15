@@ -481,8 +481,14 @@ grep -qF 'ksu_has_manager' "$KERNEL_ROOT/KernelSU/kernel/manager/manager_identit
 grep -qF 'ABK_MANAGER_MULTI_MANAGER_BRIDGE' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
 grep -qF 'abk_prune_missing_managers' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
 grep -qF 'ksu_register_manager' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
+grep -qF 'pr_info("Searching managers...\n");' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
+grep -qF 'pr_info("Search managers finished\n");' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
 grep -qF 'unlikely(is_uid_manager(uid))' "$KERNEL_ROOT/KernelSU/kernel/policy/allowlist.c"
 grep -qF 'abk_try_register_manager' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"
+if grep -qF 'struct apk_path_hash *pos, *n;' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"; then
+  echo "KernelSU bridge must not leave an unused apk_path_hash n variable" >&2
+  exit 1
+fi
 if grep -qF 'ABK Control: prefer ABK manager' "$KERNEL_ROOT/KernelSU/kernel/manager/throne_tracker.c"; then
   echo "KernelSU bridge must not prefer ABK over the official manager" >&2
   exit 1
@@ -504,7 +510,13 @@ grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/drivers/kernelsu/manager/apk_si
 grep -qF '#define CERT_MAX_LENGTH ABK_MANAGER_CERT_MAX_LENGTH' "$KERNEL_ROOT/drivers/kernelsu/manager/apk_sign.c"
 grep -qF 'ABK_MANAGER_MULTI_MANAGER_BRIDGE' "$KERNEL_ROOT/drivers/kernelsu/manager/manager_identity.h"
 grep -qF 'abk_prune_missing_managers' "$KERNEL_ROOT/drivers/kernelsu/manager/throne_tracker.c"
+grep -qF 'pr_info("Searching managers...\n");' "$KERNEL_ROOT/drivers/kernelsu/manager/throne_tracker.c"
+grep -qF 'pr_info("Search managers finished\n");' "$KERNEL_ROOT/drivers/kernelsu/manager/throne_tracker.c"
 grep -qF 'unlikely(is_uid_manager(uid))' "$KERNEL_ROOT/drivers/kernelsu/policy/allowlist.c"
+if grep -qF 'struct apk_path_hash *pos, *n;' "$KERNEL_ROOT/drivers/kernelsu/manager/throne_tracker.c"; then
+  echo "SukiSU bridge must not leave an unused apk_path_hash n variable" >&2
+  exit 1
+fi
 if grep -qF 'ABK Control: prefer ABK manager' "$KERNEL_ROOT/drivers/kernelsu/manager/throne_tracker.c"; then
   echo "SukiSU bridge must not prefer ABK over the official manager" >&2
   exit 1

@@ -547,6 +547,7 @@ def strip_old_single_manager_preference(text: str) -> str:
 
 
 def patch_single_manager_scan_block(text: str, path: Path) -> tuple[str, bool]:
+    changed = False
     replacement = """\\g<indent>if (is_manager) {
 \\g<indent>    crown_manager(dirpath, my_ctx->private_data);
 \\g<indent>} else {"""
@@ -563,23 +564,29 @@ def patch_single_manager_scan_block(text: str, path: Path) -> tuple[str, bool]:
     )
     text, count = original_pattern.subn(replacement, text, count=1)
     if count:
-        return text, True
+        changed = True
+    else:
+        old_should_stop_pattern = re.compile(
+            r"(?P<indent>[ \t]*)if \(is_manager\) \{\n"
+            r"#ifdef ABK_MANAGER_OFFICIAL_CERT\n"
+            r"(?s:.*?)"
+            r"(?P=indent)\} else \{",
+            re.S,
+        )
+        text, count = old_should_stop_pattern.subn(replacement, text, count=1)
+        if count:
+            changed = True
+        elif not ("crown_manager(dirpath, my_ctx->private_data);" in text and "*my_ctx->stop = 1;" not in text):
+            raise SystemExit(f"{path} missing single-manager scan anchor")
 
-    old_should_stop_pattern = re.compile(
-        r"(?P<indent>[ \t]*)if \(is_manager\) \{\n"
-        r"#ifdef ABK_MANAGER_OFFICIAL_CERT\n"
-        r"(?s:.*?)"
-        r"(?P=indent)\} else \{",
-        re.S,
+    text, decl_count = re.subn(
+        r"(?m)^([ \t]*)struct apk_path_hash \*pos, \*n;\n(?=\1unsigned int hash = full_name_hash)",
+        lambda match: f"{match.group(1)}struct apk_path_hash *pos;\n",
+        text,
+        count=1,
     )
-    text, count = old_should_stop_pattern.subn(replacement, text, count=1)
-    if count:
-        return text, True
-
-    if "crown_manager(dirpath, my_ctx->private_data);" in text and "*my_ctx->stop = 1;" not in text:
-        return text, False
-
-    raise SystemExit(f"{path} missing single-manager scan anchor")
+    changed = changed or bool(decl_count)
+    return text, changed
 
 
 def patch_single_manager_track_block(text: str, path: Path) -> tuple[str, bool]:
@@ -614,7 +621,7 @@ def patch_single_manager_track_block(text: str, path: Path) -> tuple[str, bool]:
     }
 
 """
-    text, count = pattern.subn(replacement, text, count=1)
+    text, count = pattern.subn(lambda _match: replacement, text, count=1)
     if not count:
         raise SystemExit(f"{path} missing track_throne manager refresh anchor")
     return text, True
