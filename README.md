@@ -59,7 +59,7 @@ After booting a kernel built with this module, the runtime bridge returns JSON:
 
 ```json
 {
-  "schema": 3,
+  "schema": 4,
   "abk_version": "1.0.6",
   "abk_commit": "abcdef0",
   "work_mode": "built-in",
@@ -106,9 +106,14 @@ After booting a kernel built with this module, the runtime bridge returns JSON:
       "stage": "after_patch",
       "type": "builtin",
       "source": "abk",
+      "module_dir": "",
+      "web_root": "",
       "readonly": true,
       "controllable": false,
-      "enabled": true
+      "enabled": true,
+      "has_web_ui": false,
+      "has_action_script": false,
+      "action_supported": false
     }
   ]
 }
@@ -146,6 +151,11 @@ static const struct abk_control_ops my_feature_ops = {
 	.name = "My Feature",
 	.version = "1.0",
 	.description = "Example controllable feature",
+	.module_dir = "/data/adb/modules/my_feature",
+	.web_root = "/data/adb/modules/my_feature/webroot",
+	.has_web_ui = true,
+	.has_action_script = true,
+	.action_supported = true,
 	.is_enabled = my_feature_enabled,
 	.set_enabled = my_feature_set_enabled,
 };

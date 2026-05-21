@@ -7,6 +7,7 @@
 
 #define ABK_CONTROL_MAX_COMMAND 160
 #define ABK_CONTROL_IOCTL_MAGIC 0xa7
+#define ABK_CONTROL_OPS_HAS_RUNTIME_UI 1
 
 struct abk_control_status_cmd {
 	__u64 data_len;
@@ -68,6 +69,11 @@ struct abk_control_ops {
 	const char *name;
 	const char *version;
 	const char *description;
+	const char *module_dir;
+	const char *web_root;
+	bool has_web_ui;
+	bool has_action_script;
+	bool action_supported;
 	bool (*is_enabled)(void *data);
 	int (*set_enabled)(bool enabled, void *data);
 	void *data;

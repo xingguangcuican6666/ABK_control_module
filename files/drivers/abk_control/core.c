@@ -187,6 +187,20 @@ static int abk_control_buf_append_json_bool_field(struct abk_control_buffer *buf
 	return abk_control_buf_append(buf, trailing_comma ? ",\n" : "\n");
 }
 
+static int abk_control_buf_append_json_inline_bool(struct abk_control_buffer *buf,
+						   const char *name,
+						   bool value,
+						   bool trailing_comma)
+{
+	int ret;
+
+	ret = abk_control_buf_appendf(buf, "\"%s\": %s", name,
+				     value ? "true" : "false");
+	if (ret)
+		return ret;
+	return abk_control_buf_append(buf, trailing_comma ? ", " : "");
+}
+
 static const char *abk_control_effective_work_mode(void)
 {
 	const char *work_mode = abk_control_build.work_mode;
@@ -405,6 +419,11 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 				     const char *repo_url,
 				     const char *stage,
 				     const char *source,
+				     const char *module_dir,
+				     const char *web_root,
+				     bool has_web_ui,
+				     bool has_action_script,
+				     bool action_supported,
 				     bool controllable,
 				     bool enabled)
 {
@@ -436,14 +455,36 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 	ABK_JSON_FIELD("stage", stage);
 	ABK_JSON_FIELD("type", "builtin");
 	ABK_JSON_FIELD("source", source);
+	ABK_JSON_FIELD("module_dir", module_dir);
+	ABK_JSON_FIELD("web_root", web_root);
 
 #undef ABK_JSON_FIELD
 
-	ret = abk_control_buf_appendf(buf,
-				     "\"readonly\": %s, \"controllable\": %s, \"enabled\": %s}",
-				     controllable ? "false" : "true",
-				     controllable ? "true" : "false",
-				     enabled ? "true" : "false");
+	ret = abk_control_buf_append_json_inline_bool(buf, "readonly",
+						     !controllable, true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_inline_bool(buf, "controllable",
+						     controllable, true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_inline_bool(buf, "enabled",
+						     enabled, true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_inline_bool(buf, "has_web_ui",
+						     has_web_ui, true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_inline_bool(buf, "has_action_script",
+						     has_action_script, true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_inline_bool(buf, "action_supported",
+						     action_supported, false);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append(buf, "}");
 	return ret;
 }
 
@@ -455,7 +496,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 	size_t i;
 	int ret;
 
-	ret = abk_control_buf_append(&buf, "{\n  \"schema\": 3,\n");
+	ret = abk_control_buf_append(&buf, "{\n  \"schema\": 4,\n");
 	if (ret)
 		goto err;
 	ret = abk_control_append_manager_info(&buf);
@@ -485,6 +526,11 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						entry->repo_url,
 						entry->stage,
 						"abk",
+						ops ? ops->module_dir : "",
+						ops ? ops->web_root : "",
+						ops ? ops->has_web_ui : false,
+						ops ? ops->has_action_script : false,
+						ops ? ops->action_supported : false,
 						ops && ops->set_enabled,
 						abk_control_ops_enabled(ops));
 		if (ret)
@@ -505,6 +551,11 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						"",
 						"runtime",
 						"abk",
+						ops->module_dir,
+						ops->web_root,
+						ops->has_web_ui,
+						ops->has_action_script,
+						ops->action_supported,
 						ops->set_enabled != NULL,
 						abk_control_ops_enabled(ops));
 		if (ret)

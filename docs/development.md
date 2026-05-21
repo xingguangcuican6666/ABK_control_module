@@ -39,7 +39,7 @@ break the whole manifest.
 
 ## Build Info
 
-The generated manifest exports schema 3 runtime build information:
+The generated manifest exports schema 4 runtime build information:
 
 - `ABK_BUILD_ANDROID_VERSION`, `ABK_BUILD_KERNEL_VERSION`,
   `ABK_BUILD_SUB_LEVEL`, `ABK_BUILD_OS_PATCH_LEVEL`
@@ -66,6 +66,11 @@ struct abk_control_ops {
 	const char *name;
 	const char *version;
 	const char *description;
+	const char *module_dir;
+	const char *web_root;
+	bool has_web_ui;
+	bool has_action_script;
+	bool action_supported;
 	bool (*is_enabled)(void *data);
 	int (*set_enabled)(bool enabled, void *data);
 	void *data;
@@ -79,6 +84,8 @@ int abk_control_run_command(const char *command, size_t command_len);
 
 `id` must be stable and unique. If it matches a generated manifest entry, the
 runtime output upgrades that entry from metadata-only to controllable.
+The runtime UI fields are optional; leave them empty or false for modules
+without a KernelSU-style module directory, WebUI, or action script.
 The status and command helpers are intended for kernel-side manager bridges;
 callers own the JSON buffer returned by `abk_control_get_status_json()` and
 must release it with `kfree()`.
