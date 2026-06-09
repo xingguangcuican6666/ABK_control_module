@@ -68,7 +68,20 @@ abk_control_conf_value() {
       key = trim(substr(line, 1, eq - 1))
       if (key != target) next
       value = trim(substr(line, eq + 1))
-      if (value ~ /^".*"$/) value = substr(value, 2, length(value) - 2)
+      if (value == "\"" || value == "'\''") {
+        quote = value
+        out = ""
+        while ((getline next_line) > 0) {
+          sub(/\r$/, "", next_line)
+          if (trim(next_line) == quote) break
+          out = out (out == "" ? "" : "\n") next_line
+        }
+        print out
+        exit
+      }
+      if ((value ~ /^".*"$/) || (value ~ /^'\''.*'\''$/)) {
+        value = substr(value, 2, length(value) - 2)
+      }
       print value
       exit
     }
@@ -236,6 +249,30 @@ abk_control_conf_or_fallback() {
   fi
 }
 
+abk_control_parse_module_set_child() {
+  local file="$1"
+  local target_id="$2"
+  local field_index="$3"
+  local raw
+
+  raw="$(abk_control_conf_value "$file" ABK_MODULE_SET_ITEMS)"
+  [ -n "$raw" ] || return 1
+  printf '%s\n' "$raw" | awk -F'|' -v target="$target_id" -v idx="$field_index" '
+    function trim(value) {
+      sub(/^[ \t\r\n]+/, "", value)
+      sub(/[ \t\r\n]+$/, "", value)
+      return value
+    }
+    {
+      line = trim($0)
+      if (line == "" || line ~ /^#/) next
+      if (trim($1) != target) next
+      print trim($(idx))
+      exit
+    }
+  '
+}
+
 abk_control_collect_manifest_entry() {
   local records_file="$1"
   local stage="$2"
@@ -245,7 +282,7 @@ abk_control_collect_manifest_entry() {
   local group_repo_url="${6:-}"
   local child_id="${7:-}"
   local conf_file="$module_dir/module.conf"
-  local id name version description group_id group_name group_role group_description
+  local id name version description group_id group_name group_role group_description child_name child_description child_repo_url
 
   if [ ! -f "$conf_file" ]; then
     abk_warn "module.conf not found, skip metadata: $repo_url"
@@ -268,12 +305,27 @@ abk_control_collect_manifest_entry() {
   group_description=""
 
   if [ "$entry_kind" = "module_set_child" ]; then
-    if [ -n "$child_id" ] && [ "$child_id" != "$id" ]; then
-      abk_warn "module child id mismatch, prefer workflow child id: $child_id -> $id ($repo_url)"
+    child_name="$(abk_control_parse_module_set_child "$conf_file" "$child_id" 2 || true)"
+    child_description="$(abk_control_parse_module_set_child "$conf_file" "$child_id" 3 || true)"
+    child_repo_url="$(abk_control_parse_module_set_child "$conf_file" "$child_id" 4 || true)"
+    if [ -n "$child_id" ]; then
+      id="$child_id"
+    fi
+    if [ -n "$child_name" ]; then
+      name="$child_name"
+    fi
+    if [ -n "$child_description" ]; then
+      description="$child_description"
+    fi
+    if [ -n "$child_repo_url" ]; then
+      repo_url="$child_repo_url"
     fi
     group_id="$(abk_control_conf_or_fallback "$conf_file" ABK_MODULE_GROUP_ID ABK_MODULE_SET_ID)"
     group_name="$(abk_control_conf_or_fallback "$conf_file" ABK_MODULE_GROUP_NAME ABK_MODULE_SET_NAME)"
-    group_role="$(abk_control_conf_value "$conf_file" ABK_MODULE_GROUP_ROLE)"
+    group_role="$(abk_control_parse_module_set_child "$conf_file" "$child_id" 8 || true)"
+    if [ -z "$group_role" ]; then
+      group_role="$(abk_control_conf_value "$conf_file" ABK_MODULE_GROUP_ROLE)"
+    fi
     group_description="$(abk_control_conf_or_fallback "$conf_file" ABK_MODULE_GROUP_DESCRIPTION ABK_MODULE_SET_DESCRIPTION)"
   fi
 
