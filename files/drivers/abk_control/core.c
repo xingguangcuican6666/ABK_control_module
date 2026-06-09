@@ -418,6 +418,11 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 				     const char *description,
 				     const char *repo_url,
 				     const char *stage,
+				     const char *group_id,
+				     const char *group_name,
+				     const char *group_role,
+				     const char *group_description,
+				     const char *group_repo_url,
 				     const char *source,
 				     const char *module_dir,
 				     const char *web_root,
@@ -453,6 +458,11 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 	ABK_JSON_FIELD("description", description);
 	ABK_JSON_FIELD("repo_url", repo_url);
 	ABK_JSON_FIELD("stage", stage);
+	ABK_JSON_FIELD("group_id", group_id);
+	ABK_JSON_FIELD("group_name", group_name);
+	ABK_JSON_FIELD("group_role", group_role);
+	ABK_JSON_FIELD("group_description", group_description);
+	ABK_JSON_FIELD("group_repo_url", group_repo_url);
 	ABK_JSON_FIELD("type", "builtin");
 	ABK_JSON_FIELD("source", source);
 	ABK_JSON_FIELD("module_dir", module_dir);
@@ -496,7 +506,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 	size_t i;
 	int ret;
 
-	ret = abk_control_buf_append(&buf, "{\n  \"schema\": 4,\n");
+	ret = abk_control_buf_append(&buf, "{\n  \"schema\": 5,\n");
 	if (ret)
 		goto err;
 	ret = abk_control_append_manager_info(&buf);
@@ -525,6 +535,11 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						entry->description,
 						entry->repo_url,
 						entry->stage,
+						entry->group_id,
+						entry->group_name,
+						entry->group_role,
+						entry->group_description,
+						entry->group_repo_url,
 						"abk",
 						ops ? ops->module_dir : "",
 						ops ? ops->web_root : "",
@@ -550,6 +565,11 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						ops->description,
 						"",
 						"runtime",
+						"",
+						"",
+						"",
+						"",
+						"",
 						"abk",
 						ops->module_dir,
 						ops->web_root,

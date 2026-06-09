@@ -31,6 +31,11 @@ struct abk_control_manifest_entry {
 	const char *description;
 	const char *repo_url;
 	const char *stage;
+	const char *group_id;
+	const char *group_name;
+	const char *group_role;
+	const char *group_description;
+	const char *group_repo_url;
 };
 
 struct abk_control_build_features {

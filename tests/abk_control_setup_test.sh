@@ -357,6 +357,10 @@ make_module() {
   local name="$3"
   local version="$4"
   local description="$5"
+  local group_id="${6:-}"
+  local group_name="${7:-}"
+  local group_role="${8:-}"
+  local group_description="${9:-}"
 
   mkdir -p "$dir"
   {
@@ -364,17 +368,24 @@ make_module() {
     printf 'ABK_MODULE_NAME="%s"\n' "$name"
     printf 'ABK_MODULE_VERSION="%s"\n' "$version"
     printf 'ABK_MODULE_DESCRIPTION="%s"\n' "$description"
+    if [ -n "$group_id" ]; then
+      printf 'ABK_MODULE_GROUP_ID="%s"\n' "$group_id"
+      printf 'ABK_MODULE_GROUP_NAME="%s"\n' "$group_name"
+      printf 'ABK_MODULE_GROUP_ROLE="%s"\n' "$group_role"
+      printf 'ABK_MODULE_GROUP_DESCRIPTION="%s"\n' "$group_description"
+    fi
   } > "$dir/module.conf"
 }
 
 make_module "$TMP_DIR/mod_alpha" "alpha_feature" "Alpha Feature" "1.0" "alpha metadata"
-make_module "$TMP_DIR/mod_beta" "beta_feature" "Beta Feature" "2.0" "beta \"quoted\" metadata"
+make_module "$TMP_DIR/mod_beta" "beta_feature" "Beta Feature" "2.0" "beta \"quoted\" metadata" \
+  "security_suite" "Security Suite" "fix" "Security fixes bundle"
 
 {
-  printf 'after_patch\t%s\t%s\n' "$REPO_ROOT" "https://github.com/xingguangcuican6666/ABK_control_module"
-  printf 'before_build\t%s\t%s\n' "$REPO_ROOT" "https://github.com/xingguangcuican6666/ABK_control_module"
-  printf 'after_patch\t%s\t%s\n' "$TMP_DIR/mod_alpha" "https://example.invalid/alpha.git"
-  printf 'before_build\t%s\t%s\n' "$TMP_DIR/mod_beta" "https://example.invalid/beta.git"
+  printf 'after_patch\t%s\t%s\tmodule\t\t\n' "$REPO_ROOT" "https://github.com/xingguangcuican6666/ABK_control_module"
+  printf 'before_build\t%s\t%s\tmodule\t\t\n' "$REPO_ROOT" "https://github.com/xingguangcuican6666/ABK_control_module"
+  printf 'after_patch\t%s\t%s\tmodule\t\t\n' "$TMP_DIR/mod_alpha" "https://example.invalid/alpha.git"
+  printf 'before_build\t%s\t%s\tmodule_set_child\thttps://example.invalid/security-suite.git\tbeta_feature\n' "$TMP_DIR/mod_beta" "https://example.invalid/beta.git"
 } > "$CUSTOM_EXTERNAL_MODULES_MANIFEST"
 
 export KERNEL_ROOT DEFCONFIG CUSTOM_EXTERNAL_MODULES_MANIFEST
@@ -448,6 +459,10 @@ grep -qF '.stage = "after_patch,before_build"' "$KERNEL_ROOT/common/drivers/abk_
 grep -qF '.id = "alpha_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.id = "beta_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.description = "beta \"quoted\" metadata"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.group_id = "security_suite"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.group_name = "Security Suite"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.group_role = "fix"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.group_repo_url = "https://example.invalid/security-suite.git"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF 'const size_t abk_control_manifest_count = 3;' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF 'const struct abk_control_build_info abk_control_build = {' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.android_version = "android15"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
@@ -460,7 +475,9 @@ grep -qF '.zram_extra_algos = "lz4,zstd"' "$KERNEL_ROOT/common/drivers/abk_contr
 grep -qF '.use_zram = true' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.use_bbg = false' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.enable_susfs = true' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
-grep -qF '\"schema\": 4' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+grep -qF '\"schema\": 5' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+grep -qF '"group_id"' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+grep -qF '"group_name"' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF '"work_mode"' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF 'ABK_JSON_FIELD("type", "builtin");' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF 'ABK_JSON_FIELD("source", source);' "$KERNEL_ROOT/common/drivers/abk_control/core.c"

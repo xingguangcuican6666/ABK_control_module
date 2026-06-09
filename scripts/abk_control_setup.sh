@@ -180,9 +180,15 @@ abk_control_record_manifest_entry() {
   local description="$5"
   local repo_url="$6"
   local stage="$7"
+  local group_id="$8"
+  local group_name="$9"
+  local group_role="${10}"
+  local group_description="${11}"
+  local group_repo_url="${12}"
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$id" "$name" "$version" "$description" "$repo_url" "$stage" >> "$records_file"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$id" "$name" "$version" "$description" "$repo_url" "$stage" \
+    "$group_id" "$group_name" "$group_role" "$group_description" "$group_repo_url" >> "$records_file"
 }
 
 abk_control_emit_manifest_entry() {
@@ -193,6 +199,11 @@ abk_control_emit_manifest_entry() {
   local description="$5"
   local repo_url="$6"
   local stages="$7"
+  local group_id="$8"
+  local group_name="$9"
+  local group_role="${10}"
+  local group_description="${11}"
+  local group_repo_url="${12}"
 
   {
     printf '\t{\n'
@@ -202,8 +213,27 @@ abk_control_emit_manifest_entry() {
     printf '\t\t.description = "%s",\n' "$(abk_control_c_escape "$description")"
     printf '\t\t.repo_url = "%s",\n' "$(abk_control_c_escape "$repo_url")"
     printf '\t\t.stage = "%s",\n' "$(abk_control_c_escape "$stages")"
+    printf '\t\t.group_id = "%s",\n' "$(abk_control_c_escape "$group_id")"
+    printf '\t\t.group_name = "%s",\n' "$(abk_control_c_escape "$group_name")"
+    printf '\t\t.group_role = "%s",\n' "$(abk_control_c_escape "$group_role")"
+    printf '\t\t.group_description = "%s",\n' "$(abk_control_c_escape "$group_description")"
+    printf '\t\t.group_repo_url = "%s",\n' "$(abk_control_c_escape "$group_repo_url")"
     printf '\t},\n'
   } >> "$entries_file"
+}
+
+abk_control_conf_or_fallback() {
+  local file="$1"
+  local primary="$2"
+  local fallback="$3"
+  local value
+
+  value="$(abk_control_conf_value "$file" "$primary")"
+  if [ -n "$value" ]; then
+    printf '%s\n' "$value"
+  else
+    abk_control_conf_value "$file" "$fallback"
+  fi
 }
 
 abk_control_collect_manifest_entry() {
@@ -211,8 +241,11 @@ abk_control_collect_manifest_entry() {
   local stage="$2"
   local module_dir="$3"
   local repo_url="$4"
+  local entry_kind="${5:-module}"
+  local group_repo_url="${6:-}"
+  local child_id="${7:-}"
   local conf_file="$module_dir/module.conf"
-  local id name version description
+  local id name version description group_id group_name group_role group_description
 
   if [ ! -f "$conf_file" ]; then
     abk_warn "module.conf not found, skip metadata: $repo_url"
@@ -229,6 +262,20 @@ abk_control_collect_manifest_entry() {
   [ -n "$id" ] || id="$(abk_control_id_from_text "$repo_url")"
   version="$(abk_control_conf_value "$conf_file" ABK_MODULE_VERSION)"
   description="$(abk_control_conf_value "$conf_file" ABK_MODULE_DESCRIPTION)"
+  group_id=""
+  group_name=""
+  group_role=""
+  group_description=""
+
+  if [ "$entry_kind" = "module_set_child" ]; then
+    if [ -n "$child_id" ] && [ "$child_id" != "$id" ]; then
+      abk_warn "module child id mismatch, prefer workflow child id: $child_id -> $id ($repo_url)"
+    fi
+    group_id="$(abk_control_conf_or_fallback "$conf_file" ABK_MODULE_GROUP_ID ABK_MODULE_SET_ID)"
+    group_name="$(abk_control_conf_or_fallback "$conf_file" ABK_MODULE_GROUP_NAME ABK_MODULE_SET_NAME)"
+    group_role="$(abk_control_conf_value "$conf_file" ABK_MODULE_GROUP_ROLE)"
+    group_description="$(abk_control_conf_or_fallback "$conf_file" ABK_MODULE_GROUP_DESCRIPTION ABK_MODULE_SET_DESCRIPTION)"
+  fi
 
   abk_control_record_manifest_entry \
     "$records_file" \
@@ -237,7 +284,12 @@ abk_control_collect_manifest_entry() {
     "$version" \
     "$description" \
     "$repo_url" \
-    "$stage"
+    "$stage" \
+    "$group_id" \
+    "$group_name" \
+    "$group_role" \
+    "$group_description" \
+    "$group_repo_url"
 }
 
 abk_control_stage_list_contains() {
@@ -253,23 +305,25 @@ abk_control_stage_list_contains() {
 abk_control_emit_merged_manifest_entries() {
   local records_file="$1"
   local entries_file="$2"
-  local seen_file id name version description repo_url stage
-  local id2 _name2 _version2 _description2 _repo_url2 stage2
+  local seen_file id name version description repo_url stage group_id group_name group_role group_description group_repo_url
+  local id2 _name2 _version2 _description2 _repo_url2 stage2 _group_id2 _group_name2 _group_role2 _group_description2 _group_repo_url2
   local stages entry_count
 
   seen_file="$(mktemp)"
   entry_count=0
 
-  while IFS=$'\t' read -r id name version description repo_url stage || [ -n "$id$name$version$description$repo_url$stage" ]; do
+  while IFS=$'\t' read -r id name version description repo_url stage group_id group_name group_role group_description group_repo_url || [ -n "$id$name$version$description$repo_url$stage$group_id$group_name$group_role$group_description$group_repo_url" ]; do
     [ -n "$id" ] || continue
-    if grep -Fqx "$id" "$seen_file"; then
+    if grep -Fqx "${id}|${group_id}|${group_repo_url}" "$seen_file"; then
       continue
     fi
-    printf '%s\n' "$id" >> "$seen_file"
+    printf '%s|%s|%s\n' "$id" "$group_id" "$group_repo_url" >> "$seen_file"
 
     stages="$stage"
-    while IFS=$'\t' read -r id2 _name2 _version2 _description2 _repo_url2 stage2 || [ -n "$id2$_name2$_version2$_description2$_repo_url2$stage2" ]; do
+    while IFS=$'\t' read -r id2 _name2 _version2 _description2 _repo_url2 stage2 _group_id2 _group_name2 _group_role2 _group_description2 _group_repo_url2 || [ -n "$id2$_name2$_version2$_description2$_repo_url2$stage2$_group_id2$_group_name2$_group_role2$_group_description2$_group_repo_url2" ]; do
       [ "$id2" = "$id" ] || continue
+      [ "$_group_id2" = "$group_id" ] || continue
+      [ "$_group_repo_url2" = "$group_repo_url" ] || continue
       if ! abk_control_stage_list_contains "$stages" "$stage2"; then
         stages="${stages},${stage2}"
       fi
@@ -282,7 +336,12 @@ abk_control_emit_merged_manifest_entries() {
       "$version" \
       "$description" \
       "$repo_url" \
-      "$stages"
+      "$stages" \
+      "$group_id" \
+      "$group_name" \
+      "$group_role" \
+      "$group_description" \
+      "$group_repo_url"
     entry_count=$((entry_count + 1))
   done < "$records_file"
 
@@ -292,7 +351,7 @@ abk_control_emit_merged_manifest_entries() {
 
 abk_control_generate_manifest_source() {
   local common_dir output records_file entries_file manifest entry_count raw_count tmp_output
-  local stage module_dir repo_url
+  local stage module_dir repo_url entry_kind group_repo_url child_id
 
   common_dir="$(abk_control_common_dir)"
   output="$common_dir/drivers/abk_control/abk_control_manifest.c"
@@ -304,9 +363,9 @@ abk_control_generate_manifest_source() {
   entry_count=0
 
   if [ -n "$manifest" ] && [ -s "$manifest" ]; then
-    while IFS=$'\t' read -r stage module_dir repo_url || [ -n "$stage$module_dir$repo_url" ]; do
+    while IFS=$'\t' read -r stage module_dir repo_url entry_kind group_repo_url child_id || [ -n "$stage$module_dir$repo_url$entry_kind$group_repo_url$child_id" ]; do
       [ -n "$stage" ] && [ -n "$module_dir" ] && [ -n "$repo_url" ] || continue
-      if abk_control_collect_manifest_entry "$records_file" "$stage" "$module_dir" "$repo_url"; then
+      if abk_control_collect_manifest_entry "$records_file" "$stage" "$module_dir" "$repo_url" "${entry_kind:-module}" "${group_repo_url:-}" "${child_id:-}"; then
         raw_count=$((raw_count + 1))
       fi
     done < "$manifest"
