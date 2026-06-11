@@ -418,6 +418,11 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 				     const char *description,
 				     const char *repo_url,
 				     const char *stage,
+				     const char *extension_id,
+				     const char *companion_package,
+				     const char *companion_display_name,
+				     const char *companion_asset_name,
+				     const char *companion_download_url,
 				     const char *group_id,
 				     const char *group_name,
 				     const char *group_role,
@@ -426,6 +431,10 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 				     const char *source,
 				     const char *module_dir,
 				     const char *web_root,
+				     bool requires_companion_app,
+				     bool settings_supported,
+				     bool per_app_supported,
+				     u32 oobe_priority,
 				     bool has_web_ui,
 				     bool has_action_script,
 				     bool action_supported,
@@ -458,6 +467,11 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 	ABK_JSON_FIELD("description", description);
 	ABK_JSON_FIELD("repo_url", repo_url);
 	ABK_JSON_FIELD("stage", stage);
+	ABK_JSON_FIELD("extension_id", extension_id);
+	ABK_JSON_FIELD("companion_package", companion_package);
+	ABK_JSON_FIELD("companion_display_name", companion_display_name);
+	ABK_JSON_FIELD("companion_asset_name", companion_asset_name);
+	ABK_JSON_FIELD("companion_download_url", companion_download_url);
 	ABK_JSON_FIELD("group_id", group_id);
 	ABK_JSON_FIELD("group_name", group_name);
 	ABK_JSON_FIELD("group_role", group_role);
@@ -480,6 +494,25 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 		return ret;
 	ret = abk_control_buf_append_json_inline_bool(buf, "enabled",
 						     enabled, true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_inline_bool(buf, "requires_companion_app",
+						     requires_companion_app,
+						     true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_inline_bool(buf, "settings_supported",
+						     settings_supported,
+						     true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_append_json_inline_bool(buf, "per_app_supported",
+						     per_app_supported,
+						     true);
+	if (ret)
+		return ret;
+	ret = abk_control_buf_appendf(buf, "\"oobe_priority\": %u, ",
+				     oobe_priority);
 	if (ret)
 		return ret;
 	ret = abk_control_buf_append_json_inline_bool(buf, "has_web_ui",
@@ -506,7 +539,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 	size_t i;
 	int ret;
 
-	ret = abk_control_buf_append(&buf, "{\n  \"schema\": 5,\n");
+	ret = abk_control_buf_append(&buf, "{\n  \"schema\": 6,\n");
 	if (ret)
 		goto err;
 	ret = abk_control_append_manager_info(&buf);
@@ -535,6 +568,11 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						entry->description,
 						entry->repo_url,
 						entry->stage,
+						entry->extension_id,
+						entry->companion_package,
+						entry->companion_display_name,
+						entry->companion_asset_name,
+						entry->companion_download_url,
 						entry->group_id,
 						entry->group_name,
 						entry->group_role,
@@ -546,6 +584,10 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						ops ? ops->has_web_ui : false,
 						ops ? ops->has_action_script : false,
 						ops ? ops->action_supported : false,
+						ops ? ops->requires_companion_app : false,
+						ops ? ops->settings_supported : false,
+						ops ? ops->per_app_supported : false,
+						ops ? ops->oobe_priority : 0,
 						ops && ops->set_enabled,
 						abk_control_ops_enabled(ops));
 		if (ret)
@@ -565,6 +607,11 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						ops->description,
 						"",
 						"runtime",
+						ops->extension_id,
+						ops->companion_package,
+						ops->companion_display_name,
+						ops->companion_asset_name,
+						ops->companion_download_url,
 						"",
 						"",
 						"",
@@ -576,6 +623,10 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						ops->has_web_ui,
 						ops->has_action_script,
 						ops->action_supported,
+						ops->requires_companion_app,
+						ops->settings_supported,
+						ops->per_app_supported,
+						ops->oobe_priority,
 						ops->set_enabled != NULL,
 						abk_control_ops_enabled(ops));
 		if (ret)
@@ -693,12 +744,37 @@ static int abk_control_status_command(const char *id)
 	return ret;
 }
 
+static int abk_control_module_command(const char *id, const char *payload)
+{
+	const struct abk_control_ops *ops;
+	int ret;
+
+	mutex_lock(&abk_control_lock);
+	ops = abk_control_find_locked(id);
+	if (!ops) {
+		ret = abk_control_manifest_has_id(id) ? -EOPNOTSUPP : -ENOENT;
+		goto out;
+	}
+
+	if (!ops->run_command) {
+		ret = -EOPNOTSUPP;
+		goto out;
+	}
+
+	ret = ops->run_command(payload, ops->data);
+
+out:
+	mutex_unlock(&abk_control_lock);
+	return ret;
+}
+
 int abk_control_run_command(const char *input, size_t count)
 {
 	char command[ABK_CONTROL_MAX_COMMAND];
 	char *cursor;
 	char *verb;
 	char *id;
+	char *payload;
 	size_t len;
 	int ret;
 
@@ -714,7 +790,9 @@ int abk_control_run_command(const char *input, size_t count)
 
 	cursor = strim(command);
 	verb = strsep(&cursor, " \t\r\n");
-	id = strim(cursor ? cursor : "");
+	id = strsep(&cursor, " \t\r\n");
+	id = strim(id ? id : "");
+	payload = strim(cursor ? cursor : "");
 
 	if (!verb || !verb[0] || !id[0])
 		return -EINVAL;
@@ -725,6 +803,8 @@ int abk_control_run_command(const char *input, size_t count)
 		ret = abk_control_set_enabled(id, false);
 	else if (!strcmp(verb, "status"))
 		ret = abk_control_status_command(id);
+	else if (!strcmp(verb, "command"))
+		ret = abk_control_module_command(id, payload);
 	else
 		ret = -EINVAL;
 

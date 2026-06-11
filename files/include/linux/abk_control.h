@@ -31,11 +31,20 @@ struct abk_control_manifest_entry {
 	const char *description;
 	const char *repo_url;
 	const char *stage;
+	const char *extension_id;
+	const char *companion_package;
+	const char *companion_display_name;
+	const char *companion_asset_name;
+	const char *companion_download_url;
 	const char *group_id;
 	const char *group_name;
 	const char *group_role;
 	const char *group_description;
 	const char *group_repo_url;
+	bool requires_companion_app;
+	bool settings_supported;
+	bool per_app_supported;
+	u32 oobe_priority;
 };
 
 struct abk_control_build_features {
@@ -76,11 +85,21 @@ struct abk_control_ops {
 	const char *description;
 	const char *module_dir;
 	const char *web_root;
+	const char *extension_id;
+	const char *companion_package;
+	const char *companion_display_name;
+	const char *companion_asset_name;
+	const char *companion_download_url;
 	bool has_web_ui;
 	bool has_action_script;
 	bool action_supported;
+	bool requires_companion_app;
+	bool settings_supported;
+	bool per_app_supported;
+	u32 oobe_priority;
 	bool (*is_enabled)(void *data);
 	int (*set_enabled)(bool enabled, void *data);
+	int (*run_command)(const char *command, void *data);
 	void *data;
 };
 
