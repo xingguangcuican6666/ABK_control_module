@@ -756,6 +756,7 @@ TASK_STRUCT_P_DECL_PATTERN = re.compile(
 TASK_STRUCT_T_DECL_PATTERN = re.compile(
     r"(?m)^(?P<indent>[ \t]*)struct[ \t]+task_struct[ \t]*\*[ \t]*t[ \t]*(?:=[^;]*)?;"
 )
+TP_MARKER_INCLUDE = '#include "hook/tp_marker.h"'
 
 
 def last_match_before(pattern: re.Pattern[str], text: str, limit: int):
@@ -779,6 +780,26 @@ def insert_after_line(text: str, pos: int, line: str) -> str:
     return text[:line_end + 1] + line + "\n" + text[line_end + 1:]
 
 
+def ensure_tp_marker_include(text: str, path: Path) -> str:
+    if "ksu_set_task_tracepoint_flag(" not in text or TP_MARKER_INCLUDE in text:
+        return text
+
+    anchors = [
+        '#include "infra/su_mount_ns.h"',
+        '#include "selinux/selinux.h"',
+        '#include "policy/app_profile.h"',
+    ]
+    for anchor in anchors:
+        pos = text.find(anchor)
+        if pos >= 0:
+            return insert_after_line(text, pos, TP_MARKER_INCLUDE)
+
+    include_matches = list(re.finditer(r"(?m)^#include[^\n]*", text))
+    if include_matches:
+        return insert_after_line(text, include_matches[-1].start(), TP_MARKER_INCLUDE)
+    raise SystemExit(f"{path} missing include anchor for hook/tp_marker.h")
+
+
 def patch_official_app_profile_thread_iter(ksu_dir: Path) -> None:
     if os.environ.get("ABK_BUILD_KSU_VARIANT") != "Official":
         return
@@ -790,16 +811,22 @@ def patch_official_app_profile_thread_iter(ksu_dir: Path) -> None:
         return
 
     text = path.read_text(errors="ignore")
+    original = text
+    text = ensure_tp_marker_include(text, path)
+
     loop = FOR_EACH_THREAD_PROFILE_PATTERN.search(text)
     if not loop:
+        if write_if_changed(path, text):
+            print(f"ABK Control: patched Official app_profile tracepoint include in {path}")
         return
 
     has_p = bool(TASK_STRUCT_P_DECL_PATTERN.search(text[:loop.start()]))
     has_t = bool(TASK_STRUCT_T_DECL_PATTERN.search(text[:loop.start()]))
     if has_p and has_t:
+        if write_if_changed(path, text):
+            print(f"ABK Control: patched Official app_profile tracepoint include in {path}")
         return
 
-    original = text
     if not has_p and has_t:
         t_decl = last_match_before(TASK_STRUCT_T_DECL_PATTERN, text, loop.start())
         if not t_decl:
@@ -857,7 +884,7 @@ def patch_official_app_profile_thread_iter(ksu_dir: Path) -> None:
         raise SystemExit(f"{path} missing Official app_profile thread declarations: {', '.join(missing)}")
 
     if write_if_changed(path, text) or text != original:
-        print(f"ABK Control: patched Official app_profile thread iterator declarations in {path}")
+        print(f"ABK Control: patched Official app_profile tracepoint compatibility in {path}")
 
 
 def patch_tracker(ksu_dir: Path) -> None:

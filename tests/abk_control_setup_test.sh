@@ -285,6 +285,8 @@ bool ksu_uid_should_umount(uid_t uid)
 }
 EOF_SINGLE_ALLOWLIST
   cat > "$dir/policy/app_profile.c" <<'EOF_SINGLE_APP_PROFILE'
+#include "policy/app_profile.h"
+
 int escape_with_root_profile(void)
 {
     int ret = 0;
@@ -294,6 +296,7 @@ int escape_with_root_profile(void)
     struct task_struct *t;
 
     for_each_thread (p, t) {
+        ksu_set_task_tracepoint_flag(t);
         ret = 0;
     }
 
@@ -578,6 +581,10 @@ if grep -qF 'struct task_struct *p = current;' "$KERNEL_ROOT/KernelSU/kernel/pol
   echo "non-Official bridge must not patch app_profile thread iterator declarations" >&2
   exit 1
 fi
+if grep -qF '#include "hook/tp_marker.h"' "$KERNEL_ROOT/KernelSU/kernel/policy/app_profile.c"; then
+  echo "non-Official bridge must not patch app_profile tracepoint include" >&2
+  exit 1
+fi
 grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/common/drivers/kernelsu/manager/apk_sign.c"
 grep -qF '#define CERT_MAX_LENGTH ABK_MANAGER_CERT_MAX_LENGTH' "$KERNEL_ROOT/common/drivers/kernelsu/manager/apk_sign.c"
 grep -qF 'TRACK_THRONE_FORCE_SEARCH_MGR' "$KERNEL_ROOT/common/drivers/kernelsu/manager/throne_tracker.c"
@@ -597,7 +604,9 @@ make_single_ksu_fixture "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu"
 )
 grep -qF 'struct task_struct *p = current;' "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu/policy/app_profile.c"
 grep -qF 'struct task_struct *t;' "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu/policy/app_profile.c"
+grep -qF '#include "hook/tp_marker.h"' "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu/policy/app_profile.c"
 assert_count 1 'struct task_struct *p = current;' "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu/policy/app_profile.c"
 assert_count 1 'struct task_struct *t;' "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu/policy/app_profile.c"
+assert_count 1 '#include "hook/tp_marker.h"' "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu/policy/app_profile.c"
 
 printf 'abk_control_setup_test passed\n'
