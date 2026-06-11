@@ -284,6 +284,22 @@ bool ksu_uid_should_umount(uid_t uid)
     return true;
 }
 EOF_SINGLE_ALLOWLIST
+  cat > "$dir/policy/app_profile.c" <<'EOF_SINGLE_APP_PROFILE'
+int escape_with_root_profile(void)
+{
+    int ret = 0;
+    struct cred *cred;
+    struct root_profile *profile = NULL;
+    struct user_struct *new_user;
+    struct task_struct *t;
+
+    for_each_thread (p, t) {
+        ret = 0;
+    }
+
+    return ret;
+}
+EOF_SINGLE_APP_PROFILE
   make_dispatch_fixture "$dir"
 }
 
@@ -558,6 +574,10 @@ if grep -qF 'ksu_invalidate_manager_uid();' "$KERNEL_ROOT/drivers/kernelsu/manag
   echo "SukiSU bridge must not invalidate official managers during ABK registration" >&2
   exit 1
 fi
+if grep -qF 'struct task_struct *p = current;' "$KERNEL_ROOT/KernelSU/kernel/policy/app_profile.c"; then
+  echo "non-Official bridge must not patch app_profile thread iterator declarations" >&2
+  exit 1
+fi
 grep -qF 'ABK_MANAGER_CERT_SHA256' "$KERNEL_ROOT/common/drivers/kernelsu/manager/apk_sign.c"
 grep -qF '#define CERT_MAX_LENGTH ABK_MANAGER_CERT_MAX_LENGTH' "$KERNEL_ROOT/common/drivers/kernelsu/manager/apk_sign.c"
 grep -qF 'TRACK_THRONE_FORCE_SEARCH_MGR' "$KERNEL_ROOT/common/drivers/kernelsu/manager/throne_tracker.c"
@@ -566,5 +586,18 @@ if grep -qF 'misc_register' "$KERNEL_ROOT/common/drivers/abk_control/core.c"; th
   echo "abk_control must not create a user-visible misc device" >&2
   exit 1
 fi
+
+OFFICIAL_KERNEL_ROOT="$TMP_DIR/official_kernel"
+make_single_ksu_fixture "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu"
+(
+  export KERNEL_ROOT="$OFFICIAL_KERNEL_ROOT"
+  export ABK_BUILD_KSU_VARIANT="Official"
+  MODULE_DIR="$REPO_ROOT" python3 "$REPO_ROOT/scripts/abk_control_ksu_patch.py"
+  MODULE_DIR="$REPO_ROOT" python3 "$REPO_ROOT/scripts/abk_control_ksu_patch.py"
+)
+grep -qF 'struct task_struct *p = current;' "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu/policy/app_profile.c"
+grep -qF 'struct task_struct *t;' "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu/policy/app_profile.c"
+assert_count 1 'struct task_struct *p = current;' "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu/policy/app_profile.c"
+assert_count 1 'struct task_struct *t;' "$OFFICIAL_KERNEL_ROOT/common/drivers/kernelsu/policy/app_profile.c"
 
 printf 'abk_control_setup_test passed\n'

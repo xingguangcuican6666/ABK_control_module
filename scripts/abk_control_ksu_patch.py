@@ -749,6 +749,117 @@ def patch_single_manager_allowlist(ksu_dir: Path) -> None:
         print(f"ABK Control: patched multi-manager allowlist checks in {path}")
 
 
+FOR_EACH_THREAD_PROFILE_PATTERN = re.compile(r"\bfor_each_thread\s*\(\s*p\s*,\s*t\s*\)")
+TASK_STRUCT_P_DECL_PATTERN = re.compile(
+    r"(?m)^(?P<indent>[ \t]*)struct[ \t]+task_struct[ \t]*\*[ \t]*p[ \t]*(?:=[^;]*)?;"
+)
+TASK_STRUCT_T_DECL_PATTERN = re.compile(
+    r"(?m)^(?P<indent>[ \t]*)struct[ \t]+task_struct[ \t]*\*[ \t]*t[ \t]*(?:=[^;]*)?;"
+)
+
+
+def last_match_before(pattern: re.Pattern[str], text: str, limit: int):
+    found = None
+    for match in pattern.finditer(text):
+        if match.start() >= limit:
+            break
+        found = match
+    return found
+
+
+def insert_before_line(text: str, pos: int, line: str) -> str:
+    line_start = text.rfind("\n", 0, pos) + 1
+    return text[:line_start] + line + "\n" + text[line_start:]
+
+
+def insert_after_line(text: str, pos: int, line: str) -> str:
+    line_end = text.find("\n", pos)
+    if line_end < 0:
+        return text + "\n" + line + "\n"
+    return text[:line_end + 1] + line + "\n" + text[line_end + 1:]
+
+
+def patch_official_app_profile_thread_iter(ksu_dir: Path) -> None:
+    if os.environ.get("ABK_BUILD_KSU_VARIANT") != "Official":
+        return
+    if is_resukisu_tracker(ksu_dir):
+        return
+
+    path = ksu_dir / "policy/app_profile.c"
+    if not path.exists():
+        return
+
+    text = path.read_text(errors="ignore")
+    loop = FOR_EACH_THREAD_PROFILE_PATTERN.search(text)
+    if not loop:
+        return
+
+    has_p = bool(TASK_STRUCT_P_DECL_PATTERN.search(text[:loop.start()]))
+    has_t = bool(TASK_STRUCT_T_DECL_PATTERN.search(text[:loop.start()]))
+    if has_p and has_t:
+        return
+
+    original = text
+    if not has_p and has_t:
+        t_decl = last_match_before(TASK_STRUCT_T_DECL_PATTERN, text, loop.start())
+        if not t_decl:
+            raise SystemExit(f"{path} missing task_struct t declaration anchor")
+        text = insert_before_line(
+            text,
+            t_decl.start(),
+            f"{t_decl.group('indent')}struct task_struct *p = current;",
+        )
+    elif has_p and not has_t:
+        p_decl = last_match_before(TASK_STRUCT_P_DECL_PATTERN, text, loop.start())
+        if not p_decl:
+            raise SystemExit(f"{path} missing task_struct p declaration anchor")
+        text = insert_after_line(
+            text,
+            p_decl.start(),
+            f"{p_decl.group('indent')}struct task_struct *t;",
+        )
+    else:
+        cred_decl = last_match_before(
+            re.compile(r"(?m)^(?P<indent>[ \t]*)struct[ \t]+cred[ \t]*\*[ \t]*cred;\n"),
+            text,
+            loop.start(),
+        )
+        if cred_decl:
+            block = (
+                f"{cred_decl.group('indent')}struct task_struct *p = current;\n"
+                f"{cred_decl.group('indent')}struct task_struct *t;\n"
+            )
+            text = text[:cred_decl.end()] + block + text[cred_decl.end():]
+        else:
+            profile_decl = last_match_before(
+                re.compile(r"(?m)^(?P<indent>[ \t]*)struct[ \t]+root_profile[ \t]*\*[ \t]*profile[ \t]*="),
+                text,
+                loop.start(),
+            )
+            if not profile_decl:
+                raise SystemExit(f"{path} missing app profile declaration anchor")
+            block = (
+                f"{profile_decl.group('indent')}struct task_struct *p = current;\n"
+                f"{profile_decl.group('indent')}struct task_struct *t;"
+            )
+            text = insert_before_line(text, profile_decl.start(), block)
+
+    loop = FOR_EACH_THREAD_PROFILE_PATTERN.search(text)
+    if not loop:
+        raise SystemExit(f"{path} missing for_each_thread(p, t) after Official app_profile fix")
+    prefix = text[:loop.start()]
+    missing = []
+    if not TASK_STRUCT_P_DECL_PATTERN.search(prefix):
+        missing.append("struct task_struct *p = current")
+    if not TASK_STRUCT_T_DECL_PATTERN.search(prefix):
+        missing.append("struct task_struct *t")
+    if missing:
+        raise SystemExit(f"{path} missing Official app_profile thread declarations: {', '.join(missing)}")
+
+    if write_if_changed(path, text) or text != original:
+        print(f"ABK Control: patched Official app_profile thread iterator declarations in {path}")
+
+
 def patch_tracker(ksu_dir: Path) -> None:
     path = ksu_dir / "manager/throne_tracker.c"
     if not path.exists():
@@ -962,6 +1073,7 @@ def main() -> None:
         ensure_kbuild_macros(ksu_dir, package, cert_size, cert_hash, cert_max_length)
         patch_apk_sign(ksu_dir)
         patch_throne_header(ksu_dir)
+        patch_official_app_profile_thread_iter(ksu_dir)
         patch_tracker(ksu_dir)
         patch_dispatch_registration(ksu_dir)
         if control_header_exists:
