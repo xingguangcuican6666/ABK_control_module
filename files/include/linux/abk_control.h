@@ -31,6 +31,7 @@ struct abk_control_manifest_entry {
 	const char *description;
 	const char *repo_url;
 	const char *stage;
+	const char *entry_kind;
 	const char *extension_id;
 	const char *companion_package;
 	const char *companion_display_name;

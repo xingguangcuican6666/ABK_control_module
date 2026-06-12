@@ -109,6 +109,10 @@ abk_control_bool_literal() {
   esac
 }
 
+abk_control_record_separator() {
+  printf '\037'
+}
+
 abk_control_work_mode() {
   case "$(printf '%s' "${ABK_BUILD_WORK_MODE:-built-in}" | tr '[:upper:]' '[:lower:]')" in
     lkm) printf 'lkm\n' ;;
@@ -193,23 +197,27 @@ abk_control_record_manifest_entry() {
   local description="$5"
   local repo_url="$6"
   local stage="$7"
-  local extension_id="$8"
-  local companion_package="$9"
-  local companion_display_name="${10}"
-  local companion_asset_name="${11}"
-  local companion_download_url="${12}"
-  local requires_companion_app="${13}"
-  local settings_supported="${14}"
-  local per_app_supported="${15}"
-  local oobe_priority="${16}"
-  local group_id="${17}"
-  local group_name="${18}"
-  local group_role="${19}"
-  local group_description="${20}"
-  local group_repo_url="${21}"
+  local entry_kind="$8"
+  local extension_id="$9"
+  local companion_package="${10}"
+  local companion_display_name="${11}"
+  local companion_asset_name="${12}"
+  local companion_download_url="${13}"
+  local requires_companion_app="${14}"
+  local settings_supported="${15}"
+  local per_app_supported="${16}"
+  local oobe_priority="${17}"
+  local group_id="${18}"
+  local group_name="${19}"
+  local group_role="${20}"
+  local group_description="${21}"
+  local group_repo_url="${22}"
+  local sep
 
-  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-    "$id" "$name" "$version" "$description" "$repo_url" "$stage" \
+  sep="$(abk_control_record_separator)"
+
+  printf "%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s${sep}%s\n" \
+    "$id" "$name" "$version" "$description" "$repo_url" "$stage" "$entry_kind" \
     "$extension_id" "$companion_package" "$companion_display_name" \
     "$companion_asset_name" "$companion_download_url" "$requires_companion_app" \
     "$settings_supported" "$per_app_supported" "$oobe_priority" "$group_id" \
@@ -224,20 +232,21 @@ abk_control_emit_manifest_entry() {
   local description="$5"
   local repo_url="$6"
   local stages="$7"
-  local extension_id="$8"
-  local companion_package="$9"
-  local companion_display_name="${10}"
-  local companion_asset_name="${11}"
-  local companion_download_url="${12}"
-  local requires_companion_app="${13}"
-  local settings_supported="${14}"
-  local per_app_supported="${15}"
-  local oobe_priority="${16}"
-  local group_id="${17}"
-  local group_name="${18}"
-  local group_role="${19}"
-  local group_description="${20}"
-  local group_repo_url="${21}"
+  local entry_kind="$8"
+  local extension_id="$9"
+  local companion_package="${10}"
+  local companion_display_name="${11}"
+  local companion_asset_name="${12}"
+  local companion_download_url="${13}"
+  local requires_companion_app="${14}"
+  local settings_supported="${15}"
+  local per_app_supported="${16}"
+  local oobe_priority="${17}"
+  local group_id="${18}"
+  local group_name="${19}"
+  local group_role="${20}"
+  local group_description="${21}"
+  local group_repo_url="${22}"
 
   {
     printf '\t{\n'
@@ -247,6 +256,7 @@ abk_control_emit_manifest_entry() {
     printf '\t\t.description = "%s",\n' "$(abk_control_c_escape "$description")"
     printf '\t\t.repo_url = "%s",\n' "$(abk_control_c_escape "$repo_url")"
     printf '\t\t.stage = "%s",\n' "$(abk_control_c_escape "$stages")"
+    printf '\t\t.entry_kind = "%s",\n' "$(abk_control_c_escape "$entry_kind")"
     printf '\t\t.extension_id = "%s",\n' "$(abk_control_c_escape "$extension_id")"
     printf '\t\t.companion_package = "%s",\n' "$(abk_control_c_escape "$companion_package")"
     printf '\t\t.companion_display_name = "%s",\n' "$(abk_control_c_escape "$companion_display_name")"
@@ -362,6 +372,15 @@ abk_control_collect_manifest_entry() {
     if [ -n "$child_repo_url" ]; then
       repo_url="$child_repo_url"
     fi
+    extension_id=""
+    companion_package=""
+    companion_display_name=""
+    companion_asset_name=""
+    companion_download_url=""
+    requires_companion_app="false"
+    settings_supported="false"
+    per_app_supported="false"
+    oobe_priority="0"
     group_id="$(abk_control_conf_or_fallback "$conf_file" ABK_MODULE_GROUP_ID ABK_MODULE_SET_ID)"
     group_name="$(abk_control_conf_or_fallback "$conf_file" ABK_MODULE_GROUP_NAME ABK_MODULE_SET_NAME)"
     group_role="$(abk_control_parse_module_set_child "$conf_file" "$child_id" 8 || true)"
@@ -379,6 +398,7 @@ abk_control_collect_manifest_entry() {
     "$description" \
     "$repo_url" \
     "$stage" \
+    "$entry_kind" \
     "$extension_id" \
     "$companion_package" \
     "$companion_display_name" \
@@ -408,25 +428,27 @@ abk_control_stage_list_contains() {
 abk_control_emit_merged_manifest_entries() {
   local records_file="$1"
   local entries_file="$2"
-  local seen_file id name version description repo_url stage extension_id companion_package companion_display_name companion_asset_name companion_download_url
+  local seen_file id name version description repo_url stage entry_kind extension_id companion_package companion_display_name companion_asset_name companion_download_url
   local requires_companion_app settings_supported per_app_supported oobe_priority group_id group_name group_role group_description group_repo_url
-  local id2 _name2 _version2 _description2 _repo_url2 stage2 _extension_id2 _companion_package2 _companion_display_name2 _companion_asset_name2 _companion_download_url2
+  local id2 _name2 _version2 _description2 _repo_url2 stage2 _entry_kind2 _extension_id2 _companion_package2 _companion_display_name2 _companion_asset_name2 _companion_download_url2
   local _requires_companion_app2 _settings_supported2 _per_app_supported2 _oobe_priority2 _group_id2 _group_name2 _group_role2 _group_description2 _group_repo_url2
-  local stages entry_count
+  local stages entry_count record_sep
 
   seen_file="$(mktemp)"
   entry_count=0
+  record_sep="$(abk_control_record_separator)"
 
-  while IFS=$'\t' read -r id name version description repo_url stage extension_id companion_package companion_display_name companion_asset_name companion_download_url requires_companion_app settings_supported per_app_supported oobe_priority group_id group_name group_role group_description group_repo_url || [ -n "$id$name$version$description$repo_url$stage$extension_id$companion_package$companion_display_name$companion_asset_name$companion_download_url$requires_companion_app$settings_supported$per_app_supported$oobe_priority$group_id$group_name$group_role$group_description$group_repo_url" ]; do
+  while IFS="$record_sep" read -r id name version description repo_url stage entry_kind extension_id companion_package companion_display_name companion_asset_name companion_download_url requires_companion_app settings_supported per_app_supported oobe_priority group_id group_name group_role group_description group_repo_url || [ -n "$id$name$version$description$repo_url$stage$entry_kind$extension_id$companion_package$companion_display_name$companion_asset_name$companion_download_url$requires_companion_app$settings_supported$per_app_supported$oobe_priority$group_id$group_name$group_role$group_description$group_repo_url" ]; do
     [ -n "$id" ] || continue
-    if grep -Fqx "${id}|${group_id}|${group_repo_url}" "$seen_file"; then
+    if grep -Fqx "${id}|${entry_kind}|${group_id}|${group_repo_url}" "$seen_file"; then
       continue
     fi
-    printf '%s|%s|%s\n' "$id" "$group_id" "$group_repo_url" >> "$seen_file"
+    printf '%s|%s|%s|%s\n' "$id" "$entry_kind" "$group_id" "$group_repo_url" >> "$seen_file"
 
     stages="$stage"
-    while IFS=$'\t' read -r id2 _name2 _version2 _description2 _repo_url2 stage2 _extension_id2 _companion_package2 _companion_display_name2 _companion_asset_name2 _companion_download_url2 _requires_companion_app2 _settings_supported2 _per_app_supported2 _oobe_priority2 _group_id2 _group_name2 _group_role2 _group_description2 _group_repo_url2 || [ -n "$id2$_name2$_version2$_description2$_repo_url2$stage2$_extension_id2$_companion_package2$_companion_display_name2$_companion_asset_name2$_companion_download_url2$_requires_companion_app2$_settings_supported2$_per_app_supported2$_oobe_priority2$_group_id2$_group_name2$_group_role2$_group_description2$_group_repo_url2" ]; do
+    while IFS="$record_sep" read -r id2 _name2 _version2 _description2 _repo_url2 stage2 _entry_kind2 _extension_id2 _companion_package2 _companion_display_name2 _companion_asset_name2 _companion_download_url2 _requires_companion_app2 _settings_supported2 _per_app_supported2 _oobe_priority2 _group_id2 _group_name2 _group_role2 _group_description2 _group_repo_url2 || [ -n "$id2$_name2$_version2$_description2$_repo_url2$stage2$_entry_kind2$_extension_id2$_companion_package2$_companion_display_name2$_companion_asset_name2$_companion_download_url2$_requires_companion_app2$_settings_supported2$_per_app_supported2$_oobe_priority2$_group_id2$_group_name2$_group_role2$_group_description2$_group_repo_url2" ]; do
       [ "$id2" = "$id" ] || continue
+      [ "$_entry_kind2" = "$entry_kind" ] || continue
       [ "$_group_id2" = "$group_id" ] || continue
       [ "$_group_repo_url2" = "$group_repo_url" ] || continue
       if ! abk_control_stage_list_contains "$stages" "$stage2"; then
@@ -442,6 +464,7 @@ abk_control_emit_merged_manifest_entries() {
       "$description" \
       "$repo_url" \
       "$stages" \
+      "$entry_kind" \
       "$extension_id" \
       "$companion_package" \
       "$companion_display_name" \

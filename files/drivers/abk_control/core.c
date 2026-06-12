@@ -410,6 +410,18 @@ static bool abk_control_ops_enabled(const struct abk_control_ops *ops)
 	return true;
 }
 
+static bool abk_control_is_module_set_child(const char *entry_kind)
+{
+	return entry_kind && !strcmp(entry_kind, "module_set_child");
+}
+
+static bool abk_control_should_expose_extension_module(const char *entry_kind,
+						       const char *extension_id)
+{
+	return extension_id && extension_id[0] &&
+	       !abk_control_is_module_set_child(entry_kind);
+}
+
 static int abk_control_append_module(struct abk_control_buffer *buf,
 				     bool *first,
 				     const char *id,
@@ -418,6 +430,7 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 				     const char *description,
 				     const char *repo_url,
 				     const char *stage,
+				     const char *entry_kind,
 				     const char *extension_id,
 				     const char *companion_package,
 				     const char *companion_display_name,
@@ -467,6 +480,7 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 	ABK_JSON_FIELD("description", description);
 	ABK_JSON_FIELD("repo_url", repo_url);
 	ABK_JSON_FIELD("stage", stage);
+	ABK_JSON_FIELD("entry_kind", entry_kind);
 	ABK_JSON_FIELD("extension_id", extension_id);
 	ABK_JSON_FIELD("companion_package", companion_package);
 	ABK_JSON_FIELD("companion_display_name", companion_display_name);
@@ -536,6 +550,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 	struct abk_control_registration *registration;
 	struct abk_control_buffer buf = {};
 	bool first = true;
+	bool extension_first = true;
 	size_t i;
 	int ret;
 
@@ -568,6 +583,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						entry->description,
 						entry->repo_url,
 						entry->stage,
+						entry->entry_kind,
 						entry->extension_id,
 						entry->companion_package,
 						entry->companion_display_name,
@@ -581,13 +597,13 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						"abk",
 						ops ? ops->module_dir : "",
 						ops ? ops->web_root : "",
+						ops ? ops->requires_companion_app : entry->requires_companion_app,
+						ops ? ops->settings_supported : entry->settings_supported,
+						ops ? ops->per_app_supported : entry->per_app_supported,
+						ops ? ops->oobe_priority : entry->oobe_priority,
 						ops ? ops->has_web_ui : false,
 						ops ? ops->has_action_script : false,
 						ops ? ops->action_supported : false,
-						ops ? ops->requires_companion_app : false,
-						ops ? ops->settings_supported : false,
-						ops ? ops->per_app_supported : false,
-						ops ? ops->oobe_priority : 0,
 						ops && ops->set_enabled,
 						abk_control_ops_enabled(ops));
 		if (ret)
@@ -607,6 +623,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						ops->description,
 						"",
 						"runtime",
+						"module",
 						ops->extension_id,
 						ops->companion_package,
 						ops->companion_display_name,
@@ -620,13 +637,133 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						"abk",
 						ops->module_dir,
 						ops->web_root,
-						ops->has_web_ui,
-						ops->has_action_script,
-						ops->action_supported,
 						ops->requires_companion_app,
 						ops->settings_supported,
 						ops->per_app_supported,
 						ops->oobe_priority,
+						ops->has_web_ui,
+						ops->has_action_script,
+						ops->action_supported,
+						ops->set_enabled != NULL,
+						abk_control_ops_enabled(ops));
+		if (ret)
+			goto unlock_err;
+	}
+
+	mutex_unlock(&abk_control_lock);
+
+	ret = abk_control_buf_append(&buf, "\n  ],\n  \"extension_modules\": [");
+	if (ret)
+		goto err;
+
+	mutex_lock(&abk_control_lock);
+
+	for (i = 0; i < abk_control_manifest_count; i++) {
+		const struct abk_control_manifest_entry *entry;
+		const struct abk_control_ops *ops;
+		const char *effective_entry_kind;
+		const char *effective_extension_id;
+		const char *effective_companion_package;
+		const char *effective_companion_display_name;
+		const char *effective_companion_asset_name;
+		const char *effective_companion_download_url;
+		bool effective_requires_companion_app;
+		bool effective_settings_supported;
+		bool effective_per_app_supported;
+		u32 effective_oobe_priority;
+
+		entry = &abk_control_manifest[i];
+		ops = entry->id ? abk_control_find_locked(entry->id) : NULL;
+		effective_entry_kind = entry->entry_kind;
+		effective_extension_id = entry->extension_id;
+		effective_companion_package = entry->companion_package;
+		effective_companion_display_name = entry->companion_display_name;
+		effective_companion_asset_name = entry->companion_asset_name;
+		effective_companion_download_url = entry->companion_download_url;
+		effective_requires_companion_app =
+			ops ? ops->requires_companion_app : entry->requires_companion_app;
+		effective_settings_supported =
+			ops ? ops->settings_supported : entry->settings_supported;
+		effective_per_app_supported =
+			ops ? ops->per_app_supported : entry->per_app_supported;
+		effective_oobe_priority =
+			ops ? ops->oobe_priority : entry->oobe_priority;
+
+		if (!abk_control_should_expose_extension_module(effective_entry_kind,
+								effective_extension_id))
+			continue;
+
+		ret = abk_control_append_module(&buf, &extension_first,
+						entry->id,
+						entry->name,
+						entry->version,
+						entry->description,
+						entry->repo_url,
+						entry->stage,
+						effective_entry_kind,
+						effective_extension_id,
+						effective_companion_package,
+						effective_companion_display_name,
+						effective_companion_asset_name,
+						effective_companion_download_url,
+						entry->group_id,
+						entry->group_name,
+						entry->group_role,
+						entry->group_description,
+						entry->group_repo_url,
+						"abk",
+						ops ? ops->module_dir : "",
+						ops ? ops->web_root : "",
+						effective_requires_companion_app,
+						effective_settings_supported,
+						effective_per_app_supported,
+						effective_oobe_priority,
+						ops ? ops->has_web_ui : false,
+						ops ? ops->has_action_script : false,
+						ops ? ops->action_supported : false,
+						ops && ops->set_enabled,
+						abk_control_ops_enabled(ops));
+		if (ret)
+			goto unlock_err;
+	}
+
+	list_for_each_entry(registration, &abk_control_registry, node) {
+		const struct abk_control_ops *ops = registration->ops;
+
+		if (!ops || !ops->id || abk_control_manifest_has_id(ops->id))
+			continue;
+		if (!abk_control_should_expose_extension_module("module",
+								ops->extension_id))
+			continue;
+
+		ret = abk_control_append_module(&buf, &extension_first,
+						ops->id,
+						ops->name,
+						ops->version,
+						ops->description,
+						"",
+						"runtime",
+						"module",
+						ops->extension_id,
+						ops->companion_package,
+						ops->companion_display_name,
+						ops->companion_asset_name,
+						ops->companion_download_url,
+						"",
+						"",
+						"",
+						"",
+						"",
+						"abk",
+						ops->module_dir,
+						ops->web_root,
+						ops->requires_companion_app,
+						ops->settings_supported,
+						ops->per_app_supported,
+						ops->oobe_priority,
+						ops->has_web_ui,
+						ops->has_action_script,
+						ops->action_supported,
 						ops->set_enabled != NULL,
 						abk_control_ops_enabled(ops));
 		if (ret)

@@ -396,9 +396,37 @@ make_module() {
   } > "$dir/module.conf"
 }
 
+append_extension_metadata() {
+  local file="$1"
+  local extension_id="$2"
+  local companion_package="$3"
+  local companion_display_name="$4"
+  local companion_asset_name="$5"
+  local companion_download_url="$6"
+
+  {
+    printf 'ABK_EXTENSION_ID="%s"\n' "$extension_id"
+    printf 'ABK_EXTENSION_REQUIRES_COMPANION_APP="true"\n'
+    printf 'ABK_EXTENSION_COMPANION_PACKAGE="%s"\n' "$companion_package"
+    printf 'ABK_EXTENSION_COMPANION_DISPLAY_NAME="%s"\n' "$companion_display_name"
+    printf 'ABK_EXTENSION_COMPANION_ASSET_NAME="%s"\n' "$companion_asset_name"
+    printf 'ABK_EXTENSION_COMPANION_DOWNLOAD_URL="%s"\n' "$companion_download_url"
+    printf 'ABK_EXTENSION_SETTINGS_SUPPORTED="true"\n'
+    printf 'ABK_EXTENSION_PER_APP_SUPPORTED="true"\n'
+    printf 'ABK_EXTENSION_OOBE_PRIORITY="42"\n'
+  } >> "$file"
+}
+
 make_module "$TMP_DIR/mod_alpha" "alpha_feature" "Alpha Feature" "1.0" "alpha metadata"
 make_module "$TMP_DIR/mod_beta" "beta_feature" "Beta Feature" "2.0" "beta \"quoted\" metadata" \
   "security_suite" "Security Suite" "fix" "Security fixes bundle"
+append_extension_metadata \
+  "$TMP_DIR/mod_beta/module.conf" \
+  "beta_extension" \
+  "com.example.beta" \
+  "Beta Companion" \
+  "beta-companion-release.apk" \
+  "https://example.invalid/beta-companion.apk"
 
 {
   printf 'after_patch\t%s\t%s\tmodule\t\t\n' "$REPO_ROOT" "https://github.com/xingguangcuican6666/ABK_control_module"
@@ -478,11 +506,15 @@ grep -qF '.stage = "after_patch,before_build"' "$KERNEL_ROOT/common/drivers/abk_
 grep -qF '.id = "alpha_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.id = "beta_feature"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.description = "beta \"quoted\" metadata"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.entry_kind = "module"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+grep -qF '.entry_kind = "module_set_child"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.group_id = "security_suite"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.group_name = "Security Suite"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.group_role = "fix"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.group_repo_url = "https://example.invalid/security-suite.git"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF 'const size_t abk_control_manifest_count = 3;' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+! grep -qF 'beta_extension' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
+! grep -qF 'com.example.beta' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF 'const struct abk_control_build_info abk_control_build = {' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.android_version = "android15"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.kernel_version = "6.6"' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
@@ -495,6 +527,8 @@ grep -qF '.use_zram = true' "$KERNEL_ROOT/common/drivers/abk_control/abk_control
 grep -qF '.use_bbg = false' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '.enable_susfs = true' "$KERNEL_ROOT/common/drivers/abk_control/abk_control_manifest.c"
 grep -qF '\"schema\": 6' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+grep -qF '"entry_kind"' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
+grep -qF '"extension_modules"' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF '"group_id"' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF '"group_name"' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
 grep -qF '"extension_id"' "$KERNEL_ROOT/common/drivers/abk_control/core.c"
