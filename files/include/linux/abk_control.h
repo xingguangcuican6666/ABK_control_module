@@ -37,6 +37,7 @@ struct abk_control_manifest_entry {
 	const char *companion_display_name;
 	const char *companion_asset_name;
 	const char *companion_download_url;
+	const char *service_activity;
 	const char *group_id;
 	const char *group_name;
 	const char *group_role;
@@ -91,6 +92,7 @@ struct abk_control_ops {
 	const char *companion_display_name;
 	const char *companion_asset_name;
 	const char *companion_download_url;
+	const char *service_activity;
 	bool has_web_ui;
 	bool has_action_script;
 	bool action_supported;

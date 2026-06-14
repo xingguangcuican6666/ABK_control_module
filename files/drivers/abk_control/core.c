@@ -436,6 +436,7 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 				     const char *companion_display_name,
 				     const char *companion_asset_name,
 				     const char *companion_download_url,
+				     const char *service_activity,
 				     const char *group_id,
 				     const char *group_name,
 				     const char *group_role,
@@ -486,6 +487,7 @@ static int abk_control_append_module(struct abk_control_buffer *buf,
 	ABK_JSON_FIELD("companion_display_name", companion_display_name);
 	ABK_JSON_FIELD("companion_asset_name", companion_asset_name);
 	ABK_JSON_FIELD("companion_download_url", companion_download_url);
+	ABK_JSON_FIELD("service_activity", service_activity);
 	ABK_JSON_FIELD("group_id", group_id);
 	ABK_JSON_FIELD("group_name", group_name);
 	ABK_JSON_FIELD("group_role", group_role);
@@ -589,6 +591,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						entry->companion_display_name,
 						entry->companion_asset_name,
 						entry->companion_download_url,
+						ops ? ops->service_activity : entry->service_activity,
 						entry->group_id,
 						entry->group_name,
 						entry->group_role,
@@ -629,6 +632,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						ops->companion_display_name,
 						ops->companion_asset_name,
 						ops->companion_download_url,
+						ops->service_activity,
 						"",
 						"",
 						"",
@@ -667,6 +671,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 		const char *effective_companion_display_name;
 		const char *effective_companion_asset_name;
 		const char *effective_companion_download_url;
+		const char *effective_service_activity;
 		bool effective_requires_companion_app;
 		bool effective_settings_supported;
 		bool effective_per_app_supported;
@@ -680,6 +685,8 @@ static int abk_control_build_status(char **out, size_t *out_len)
 		effective_companion_display_name = entry->companion_display_name;
 		effective_companion_asset_name = entry->companion_asset_name;
 		effective_companion_download_url = entry->companion_download_url;
+		effective_service_activity =
+			ops ? ops->service_activity : entry->service_activity;
 		effective_requires_companion_app =
 			ops ? ops->requires_companion_app : entry->requires_companion_app;
 		effective_settings_supported =
@@ -706,6 +713,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						effective_companion_display_name,
 						effective_companion_asset_name,
 						effective_companion_download_url,
+						effective_service_activity,
 						entry->group_id,
 						entry->group_name,
 						entry->group_role,
@@ -749,6 +757,7 @@ static int abk_control_build_status(char **out, size_t *out_len)
 						ops->companion_display_name,
 						ops->companion_asset_name,
 						ops->companion_download_url,
+						ops->service_activity,
 						"",
 						"",
 						"",
