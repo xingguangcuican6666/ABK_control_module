@@ -194,7 +194,7 @@ for variant in $variants; do
     cat Makefile
     echo =====
     if [ "$LKM_KMI" = "android16-7.0" ]; then
-      sed -i 's#./check_symbol $(ODIR)/kernelsu.ko#actual_ko=$$(find $(ODIR) $(KDIR) \( -name "xingguang_ddk.ko" -o -name "kernelsu.ko" -o -name "sukisu.ko" -o -name "resukisu.ko" \) 2>/dev/null | head -n 1); echo "--> Target KO found at: $$actual_ko"; if [ -n "$$actual_ko" ]; then cp "$$actual_ko" $(ODIR)/kernelsu.ko; fi; ./check_symbol $(ODIR)/kernelsu.ko#' Makefile
+      sed -i 's#./check_symbol $(ODIR)/kernelsu.ko#actual_ko=""; for f in "$(ODIR)/xingguang_ddk.ko" "$(ODIR)/kernelsu.ko" "$(ODIR)/sukisu.ko" "$(ODIR)/resukisu.ko" "$(KDIR)/xingguang_ddk.ko" "$(KDIR)/kernelsu.ko" "$(KDIR)/sukisu.ko" "$(KDIR)/resukisu.ko"; do if [ -f "$$f" ]; then actual_ko="$$f"; break; fi; done; echo "--> Target KO found at: $$actual_ko"; if [ -n "$$actual_ko" ]; then cp "$$actual_ko" $(ODIR)/kernelsu.ko; fi; ./check_symbol $(ODIR)/kernelsu.ko#' Makefile
     fi
     cat Makefile
     case "$variant" in
