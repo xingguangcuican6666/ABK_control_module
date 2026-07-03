@@ -191,6 +191,9 @@ for variant in $variants; do
 
   (
     cd "$build_dir"
+    if [ "$LKM_KMI" = "android16-7.0" ]; then
+      sed -i 's/kernelsu.ko/xingguang_ddk.ko/g' Makefile
+    fi
     case "$variant" in
       kernelsu)
         CONFIG_KSU=m CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
