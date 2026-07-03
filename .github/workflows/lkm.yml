@@ -11,6 +11,9 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: read
+      packages: read
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +34,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/${{ matrix.kmi == 'android16-7.0' && 'xingguangcuican6666' || 'ylarod' }}/ddk-min:${{ matrix.kmi }}-20260313
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
       options: --privileged
 
     steps:

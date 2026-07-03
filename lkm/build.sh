@@ -87,11 +87,15 @@ clone_variant_source() {
   local build_root
 
   build_root="$(mktemp -d "${TMPDIR:-/tmp}/abk-lkm-${variant}.XXXXXX")"
+  git clone --depth 1 --single-branch "$repo_url" "$build_root" >/dev/null
   if [ -n "$repo_ref" ]; then
-    git clone --depth 1 --single-branch "$repo_url" "$build_root" >/dev/null
-    git -C "$build_root" checkout -q "$repo_ref"
-  else
-    git clone --depth 1 --single-branch "$repo_url" "$build_root" >/dev/null
+    if ! git -C "$build_root" checkout -q "$repo_ref" >/dev/null 2>&1; then
+      if git -C "$build_root" fetch --depth 1 origin "$repo_ref" >/dev/null 2>&1; then
+        git -C "$build_root" checkout -q FETCH_HEAD
+      else
+        printf '[lkm] warning: ref %s not found for %s, using default branch\n' "$repo_ref" "$repo_url" >&2
+      fi
+    fi
   fi
   TMP_DIRS+=("$build_root")
   printf '%s\n' "$build_root"
