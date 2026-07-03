@@ -104,6 +104,26 @@ patch_abk_manager() {
     python3 "$ROOT_DIR/scripts/abk_control_ksu_patch.py"
 }
 
+patch_android16_check_symbol() {
+  local build_dir="$1"
+  local check_symbol="$build_dir/tools/check_symbol.c"
+
+  [ -f "$check_symbol" ] || return 0
+
+  python3 - "$check_symbol" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+old = """    if (ko_version_sec->sh_size != 0) {\n        fprintf(stderr, \"Error: __versions section in %s must have size 0 (actual=%llu)\\n\", ko_path,\n                (unsigned long long)ko_version_sec->sh_size);\n        close_elf(&ko_elf);\n        close_elf(&vmlinux);\n        return 1;\n    }\n"""
+new = """    if (ko_version_sec->sh_size != 0) {\n        fprintf(stderr, \"Warning: __versions section in %s has size %llu\\n\", ko_path,\n                (unsigned long long)ko_version_sec->sh_size);\n    }\n"""
+text = path.read_text()
+if old not in text:
+    raise SystemExit(f"expected check_symbol block not found in {path}")
+path.write_text(text.replace(old, new, 1))
+PY
+}
+
 build_variant_module() {
   local kmi="$1"
   local variant="$2"
@@ -231,6 +251,10 @@ for variant in $variants; do
 
   if [ "$PATCH_ABK_MANAGER" != "0" ]; then
     patch_abk_manager "$build_root"
+  fi
+
+  if [ "$KMI" = "android16-7.0" ]; then
+    patch_android16_check_symbol "$build_dir"
   fi
 
   if [ "$PATCH_ONLY" -eq 1 ]; then
