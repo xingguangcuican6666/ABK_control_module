@@ -26,10 +26,11 @@ jobs:
           - android14-6.1
           - android15-6.6
           - android16-6.12
+          - android16-7.0
 
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-20260313
+      image: ghcr.io/${{ matrix.kmi == 'android16-7.0' && 'xingguangcuican6666' || 'ylarod' }}/ddk-min:${{ matrix.kmi }}-20260313
       options: --privileged
 
     steps:
