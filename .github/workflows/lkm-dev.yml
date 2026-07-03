@@ -44,7 +44,7 @@ jobs:
           LKM_OUT_DIR: ${{ github.workspace }}/lkm/out
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          LKM_REPO_REF_KERNELSU=dev LKM_REPO_REF_SUKISU=dev LKM_REPO_REF_RESUKISU=dev bash lkm/build.sh
+          LKM_REPO_REF_KERNELSU=dev LKM_REPO_REF_SUKISU=dev LKM_REPO_REF_RESUKISU=dev bash lkm/build-dev.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
