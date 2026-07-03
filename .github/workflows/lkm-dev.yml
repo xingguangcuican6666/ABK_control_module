@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - '.github/workflows/lkm.yml'
-      - 'lkm/**'
+      - 'lkm/build-dev.sh'
   workflow_dispatch:
 
 jobs:
