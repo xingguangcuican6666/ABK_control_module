@@ -203,6 +203,9 @@ for variant in $variants; do
         ;;
     esac
   )
+  if [ -f "$build_dir/xingguang_ddk.ko" ]; then
+    mv "$build_dir/xingguang_ddk.ko" "$build_dir/kernelsu.ko"
+  fi
 
   [ -f "$build_dir/kernelsu.ko" ] || die "build did not produce $build_dir/kernelsu.ko"
   cp "$build_dir/kernelsu.ko" "$artifact"
