@@ -191,6 +191,8 @@ for variant in $variants; do
 
   (
     cd "$build_dir"
+    cat Makefile
+    echo =====
     if [ "$LKM_KMI" = "android16-7.0" ]; then
       sed -i 's/kernelsu.ko/xingguang_ddk.ko/g' Makefile
     fi
