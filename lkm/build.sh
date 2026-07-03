@@ -104,6 +104,55 @@ patch_abk_manager() {
     python3 "$ROOT_DIR/scripts/abk_control_ksu_patch.py"
 }
 
+build_variant_module() {
+  local kmi="$1"
+  local variant="$2"
+  local build_dir="$3"
+
+  if [ "$kmi" != "android16-7.0" ]; then
+    (
+      cd "$build_dir"
+      case "$variant" in
+        kernelsu)
+          CONFIG_KSU=m CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
+          ;;
+        sukisu)
+          CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
+          ;;
+        resukisu)
+          CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
+          ;;
+      esac
+    )
+    return
+  fi
+
+  local make_args=(
+    make
+    ARCH=arm64
+    SUBARCH=arm64
+    LLVM=1
+    LLVM_IAS=1
+    CC=clang
+    "KCFLAGS=$FRAME_WARN_KCFLAGS"
+    CONFIG_KSU=m
+  )
+
+  case "$variant" in
+    sukisu)
+      make_args+=(CONFIG_KSU_TRACEPOINT_HOOK=y)
+      ;;
+    resukisu)
+      make_args+=(CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y)
+      ;;
+  esac
+
+  (
+    cd "$build_dir"
+    "${make_args[@]}"
+  )
+}
+
 VARIANT="${LKM_VARIANT:-all}"
 KMI="${LKM_KMI:-${DDK_TARGET:-}}"
 OUT_DIR="${LKM_OUT_DIR:-$DEFAULT_OUT_DIR}"
@@ -189,26 +238,7 @@ for variant in $variants; do
     continue
   fi
 
-  (
-    cd "$build_dir"
-    if [ "$LKM_KMI" = "android16-7.0" ]; then
-      sed -i 's/kernelsu.ko/xingguang_ddk.ko/g' Makefile
-    fi
-    case "$variant" in
-      kernelsu)
-        CONFIG_KSU=m CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
-        ;;
-      sukisu)
-        CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
-        ;;
-      resukisu)
-        CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
-        ;;
-    esac
-  )
-  if [ -f "$build_dir/xingguang_ddk.ko" ]; then
-    mv "$build_dir/xingguang_ddk.ko" "$build_dir/kernelsu.ko"
-  fi
+  build_variant_module "$KMI" "$variant" "$build_dir"
 
   [ -f "$build_dir/kernelsu.ko" ] || die "build did not produce $build_dir/kernelsu.ko"
   cp "$build_dir/kernelsu.ko" "$artifact"

@@ -270,15 +270,39 @@ fake_bin="$TMP_DIR/bin"
 mkdir -p "$fake_bin"
 cat > "$fake_bin/make" <<'EOF_MAKE'
 #!/usr/bin/env bash
+printf '%s\n' "$*" > "$ABK_TEST_CAPTURE_MAKE_ARGS"
+if grep -q 'xingguang_ddk' Makefile 2>/dev/null; then
+  echo "unexpected xingguang_ddk-specific Makefile mutation" >&2
+  exit 1
+fi
 printf 'fake-ko\n' > kernelsu.ko
 EOF_MAKE
 chmod +x "$fake_bin/make"
 
 PATH="$fake_bin:$PATH" \
+ABK_TEST_CAPTURE_MAKE_ARGS="$TMP_DIR/make.args" \
 LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" \
 LKM_REPO_URL_SUKISU="$SUKISU_REPO" \
 LKM_REPO_URL_RESUKISU="$RESUKISU_REPO" \
-bash "$REPO_ROOT/lkm/build.sh" --variant kernelsu --kmi android15-6.6 --patch-only >/dev/null
+bash "$REPO_ROOT/lkm/build.sh" --variant resukisu --kmi android16-7.0 >/dev/null
+
+make_args_path="$TMP_DIR/make.args"
+[ -n "$make_args_path" ] || {
+  printf 'missing captured make arguments\n' >&2
+  exit 1
+}
+captured_make_args="$(cat "$make_args_path")"
+if ! [[ "$captured_make_args" == *"ARCH=arm64"* &&
+    "$captured_make_args" == *"SUBARCH=arm64"* &&
+    "$captured_make_args" == *"LLVM=1"* &&
+    "$captured_make_args" == *"LLVM_IAS=1"* &&
+    "$captured_make_args" == *"CONFIG_KSU=m"* &&
+    "$captured_make_args" == *"CONFIG_KSU_TRACEPOINT_HOOK=y"* &&
+    "$captured_make_args" == *"CONFIG_KSU_MULTI_MANAGER_SUPPORT=y"* &&
+    "$captured_make_args" == *"CC=clang"* ]]; then
+  printf 'unexpected make args: %s\n' "$captured_make_args" >&2
+  exit 1
+fi
 
 list_output="$(bash "$REPO_ROOT/lkm/build.sh" --list)"
 assert_line $'kernelsu\nsukisu\nresukisu' "$list_output"
