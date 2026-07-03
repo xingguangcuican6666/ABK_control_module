@@ -1,4 +1,4 @@
-Name: LKM Dev Build
+name: LKM Dev Build
 
 on:
   push:
