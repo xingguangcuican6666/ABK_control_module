@@ -6,12 +6,16 @@ DEFAULT_OUT_DIR="$ROOT_DIR/lkm/out"
 
 usage() {
   cat <<'EOF'
-usage: lkm/build.sh [--variant NAME|all] [--kmi KMI] [--out-dir PATH] [--dry-run] [--patch-only] [--no-abk-manager] [--list]
+usage: lkm/build.sh [--variant NAME|all] [--track stable|dev] [--kmi KMI] [--out-dir PATH] [--dry-run] [--patch-only] [--no-abk-manager] [--list]
 
 variants:
   kernelsu
   sukisu
   bakasu
+
+tracks:
+  stable    pinned commit (default), matches ABK's Stable tier
+  dev       pinned commit, matches ABK's Dev tier
 
 The build clones the upstream source at runtime, patches it with the ABK
 manager bridge by default, and then produces kernelsu.ko.
@@ -40,20 +44,30 @@ variant_repo_url() {
   esac
 }
 
-# Static pins, kept identical to ABK's .github/scripts/resolve-ksu-ref.sh Stable tier so a
-# bundled LKM always matches the kernel it was built alongside. The clone below fetches only
-# the default branch at depth 1, so an unpinned build silently drifts to whatever main HEAD
-# happens to be that day. Override with LKM_REPO_REF_<VARIANT> to build another commit.
+# Per-tier pins, mirroring ABK's .github/scripts/resolve-ksu-ref.sh: Stable and Dev are
+# each pinned to their own commit (today the two point at the same SHA, but they are
+# maintained separately so one can move without the other), and no tier tracks a moving
+# main HEAD. A ref may also be a branch name, in which case clone_variant_source checks
+# that out instead. Override any tier with LKM_REPO_REF_<VARIANT>.
 variant_repo_ref() {
-  case "$1" in
-    kernelsu)
-      printf '%s\n' "${LKM_REPO_REF_KERNELSU:-08a3b087e49227c8a6731c5f1114998b5e25255b}"
+  local track="$2"
+
+  case "$track" in
+    stable)
+      case "$1" in
+        kernelsu) printf '%s\n' "${LKM_REPO_REF_KERNELSU:-08a3b087e49227c8a6731c5f1114998b5e25255b}" ;;
+        sukisu)   printf '%s\n' "${LKM_REPO_REF_SUKISU:-cf87e3f4ddd3f6e5464d85acf56aaa6950e70841}" ;;
+        bakasu)   printf '%s\n' "${LKM_REPO_REF_BAKASU:-9dbce02e511ea6b6305a238b84e456f6a92e1d0b}" ;;
+        *) return 1 ;;
+      esac
       ;;
-    sukisu)
-      printf '%s\n' "${LKM_REPO_REF_SUKISU:-cf87e3f4ddd3f6e5464d85acf56aaa6950e70841}"
-      ;;
-    bakasu)
-      printf '%s\n' "${LKM_REPO_REF_BAKASU:-9dbce02e511ea6b6305a238b84e456f6a92e1d0b}"
+    dev)
+      case "$1" in
+        kernelsu) printf '%s\n' "${LKM_REPO_REF_KERNELSU:-08a3b087e49227c8a6731c5f1114998b5e25255b}" ;;
+        sukisu)   printf '%s\n' "${LKM_REPO_REF_SUKISU:-cf87e3f4ddd3f6e5464d85acf56aaa6950e70841}" ;;
+        bakasu)   printf '%s\n' "${LKM_REPO_REF_BAKASU:-9dbce02e511ea6b6305a238b84e456f6a92e1d0b}" ;;
+        *) return 1 ;;
+      esac
       ;;
     *)
       return 1
@@ -133,6 +147,7 @@ build_variant_module() {
 }
 
 VARIANT="${LKM_VARIANT:-all}"
+TRACK="${LKM_TRACK:-stable}"
 KMI="${LKM_KMI:-${DDK_TARGET:-}}"
 OUT_DIR="${LKM_OUT_DIR:-$DEFAULT_OUT_DIR}"
 DRY_RUN=0
@@ -145,6 +160,11 @@ while [ $# -gt 0 ]; do
     --variant)
       [ $# -ge 2 ] || die "--variant needs a value"
       VARIANT="$2"
+      shift 2
+      ;;
+    --track)
+      [ $# -ge 2 ] || die "--track needs a value"
+      TRACK="$2"
       shift 2
       ;;
     --kmi)
@@ -193,7 +213,7 @@ fi
 
 for variant in $variants; do
   repo_url="$(variant_repo_url "$variant")" || die "unsupported variant: $variant"
-  repo_ref="$(variant_repo_ref "$variant")" || die "unsupported variant: $variant"
+  repo_ref="$(variant_repo_ref "$variant" "$TRACK")" || die "unsupported variant/track: $variant/$TRACK"
   artifact_dir="$OUT_DIR/$variant"
   artifact="$artifact_dir/${KMI}_kernelsu.ko"
 

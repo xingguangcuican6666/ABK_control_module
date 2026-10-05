@@ -21,6 +21,11 @@ jobs:
           - kernelsu
           - sukisu
           - bakasu
+        track:
+          # ABK's Latest tier is the only one that tracks a moving main HEAD, and it has
+          # no LKM counterpart here: every artifact the app bundles must come from a pin.
+          - stable
+          - dev
         kmi:
           - android12-5.10
           - android13-5.10
@@ -45,6 +50,7 @@ jobs:
       - name: Build module
         env:
           LKM_VARIANT: ${{ matrix.variant }}
+          LKM_TRACK: ${{ matrix.track }}
           LKM_KMI: ${{ matrix.kmi }}
           LKM_OUT_DIR: ${{ github.workspace }}/lkm/out
         run: |
@@ -54,5 +60,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.variant }}-${{ matrix.kmi }}-lkm
+          name: ${{ matrix.variant }}-${{ matrix.track }}-${{ matrix.kmi }}-lkm
           path: ${{ github.workspace }}/lkm/out/${{ matrix.variant }}/${{ matrix.kmi }}_kernelsu.ko

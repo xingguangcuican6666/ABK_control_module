@@ -49,10 +49,13 @@ jobs:
           LKM_OUT_DIR: ${{ github.workspace }}/lkm/out
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          LKM_REPO_REF_KERNELSU=dev LKM_REPO_REF_SUKISU=dev LKM_REPO_REF_BAKASU=dev bash lkm/build-dev.sh
+          # This workflow is the tracking tier: it follows each upstream's moving dev
+          # branch. Baka-SU/BakaSU ships no dev branch, so it stays on its pinned commit
+          # (clone_variant_source would otherwise warn and fall back to main HEAD).
+          LKM_REPO_REF_KERNELSU=dev LKM_REPO_REF_SUKISU=dev bash lkm/build-dev.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.variant }}-${{ matrix.kmi }}-lkm
+          name: ${{ matrix.variant }}-dev-${{ matrix.kmi }}-lkm
           path: ${{ github.workspace }}/lkm/out/${{ matrix.variant }}/${{ matrix.kmi }}_kernelsu.ko

@@ -330,16 +330,34 @@ assert_line $'kernelsu\nsukisu\nbakasu' "$list_output"
 # silently bundles an LKM built against a different kernel than the one shipped beside it.
 assert_resolved_pin() {
   local variant="$1"
-  local expected_ref="$2"
+  local track="$2"
+  local expected_ref="$3"
   local out
   # dry-run prints "<variant>\t<url>\t<ref>\t<artifact>"; the URL is overridden per
   # variant above only where a fake repo exists, so compare the ref field alone.
-  out="$(bash "$REPO_ROOT/lkm/build.sh" --variant "$variant" --kmi android16-6.12 --dry-run | cut -f3)"
+  out="$(bash "$REPO_ROOT/lkm/build.sh" --variant "$variant" --track "$track" --kmi android16-6.12 --dry-run | cut -f3)"
   assert_line "$expected_ref" "$out"
 }
 
-assert_resolved_pin kernelsu "$KERNELSU_PIN"
-assert_resolved_pin sukisu "$SUKISU_PIN"
-assert_resolved_pin bakasu "$BAKASU_PIN"
+assert_resolved_pin kernelsu stable "$KERNELSU_PIN"
+assert_resolved_pin sukisu stable "$SUKISU_PIN"
+assert_resolved_pin bakasu stable "$BAKASU_PIN"
+
+# Dev is a separate pin, not an alias for stable: the two are maintained independently so
+# one can move without the other. They agree today, which a resolved-ref assertion cannot
+# tell apart from dev silently inheriting stable's value -- so require each tier to carry
+# its own literal, exactly once per variant, in lkm/build.sh.
+for pin_spec in \
+  "LKM_REPO_REF_KERNELSU:$KERNELSU_PIN" \
+  "LKM_REPO_REF_SUKISU:$SUKISU_PIN" \
+  "LKM_REPO_REF_BAKASU:$BAKASU_PIN"; do
+  override="${pin_spec%%:*}"
+  pin="${pin_spec##*:}"
+  declared="$(grep -c -- "$override:-$pin" "$REPO_ROOT/lkm/build.sh")"
+  if [ "$declared" -ne 2 ]; then
+    printf 'expected 2 declarations of %s (one per tier), found %s\n' "$override" "$declared" >&2
+    exit 1
+  fi
+done
 
 printf 'lkm_build_test passed\n'
