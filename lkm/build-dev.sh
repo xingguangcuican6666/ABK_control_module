@@ -40,16 +40,20 @@ variant_repo_url() {
   esac
 }
 
+# Static pins, kept identical to ABK's .github/scripts/resolve-ksu-ref.sh Stable tier so a
+# bundled LKM always matches the kernel it was built alongside. The clone below fetches only
+# the default branch at depth 1, so an unpinned build silently drifts to whatever main HEAD
+# happens to be that day. Override with LKM_REPO_REF_<VARIANT> to build another commit.
 variant_repo_ref() {
   case "$1" in
     kernelsu)
-      printf '%s\n' "${LKM_REPO_REF_KERNELSU:-}"
+      printf '%s\n' "${LKM_REPO_REF_KERNELSU:-08a3b087e49227c8a6731c5f1114998b5e25255b}"
       ;;
     sukisu)
-      printf '%s\n' "${LKM_REPO_REF_SUKISU:-}"
+      printf '%s\n' "${LKM_REPO_REF_SUKISU:-cf87e3f4ddd3f6e5464d85acf56aaa6950e70841}"
       ;;
     bakasu)
-      printf '%s\n' "${LKM_REPO_REF_BAKASU:-}"
+      printf '%s\n' "${LKM_REPO_REF_BAKASU:-9dbce02e511ea6b6305a238b84e456f6a92e1d0b}"
       ;;
     *)
       return 1
@@ -108,72 +112,23 @@ patch_abk_manager() {
     python3 "$ROOT_DIR/scripts/abk_control_ksu_patch.py"
 }
 
-patch_android16_check_symbol() {
-  local build_dir="$1"
-  local check_symbol="$build_dir/tools/check_symbol.c"
-
-  [ -f "$check_symbol" ] || return 0
-
-  python3 - "$check_symbol" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-old = """    if (ko_version_sec->sh_size != 0) {\n        fprintf(stderr, \"Error: __versions section in %s must have size 0 (actual=%llu)\\n\", ko_path,\n                (unsigned long long)ko_version_sec->sh_size);\n        close_elf(&ko_elf);\n        close_elf(&vmlinux);\n        return 1;\n    }\n"""
-new = """    if (ko_version_sec->sh_size != 0) {\n        fprintf(stderr, \"Warning: __versions section in %s has size %llu\\n\", ko_path,\n                (unsigned long long)ko_version_sec->sh_size);\n    }\n"""
-text = path.read_text()
-if old not in text:
-    raise SystemExit(f"expected check_symbol block not found in {path}")
-path.write_text(text.replace(old, new, 1))
-PY
-}
-
 build_variant_module() {
-  local kmi="$1"
-  local variant="$2"
-  local build_dir="$3"
-
-  if [ "$kmi" != "android16-7.0" ]; then
-    (
-      cd "$build_dir"
-      case "$variant" in
-        kernelsu)
-          CONFIG_KSU=m CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
-          ;;
-        sukisu)
-          CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
-          ;;
-        bakasu)
-          CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
-          ;;
-      esac
-    )
-    return
-  fi
-
-  local make_args=(
-    make
-    ARCH=arm64
-    SUBARCH=arm64
-    LLVM=1
-    LLVM_IAS=1
-    CC=clang
-    "KCFLAGS=$FRAME_WARN_KCFLAGS"
-    CONFIG_KSU=m
-  )
-
-  case "$variant" in
-    sukisu)
-      make_args+=(CONFIG_KSU_TRACEPOINT_HOOK=y)
-      ;;
-    bakasu)
-      make_args+=(CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y)
-      ;;
-  esac
+  local variant="$1"
+  local build_dir="$2"
 
   (
     cd "$build_dir"
-    "${make_args[@]}"
+    case "$variant" in
+      kernelsu)
+        CONFIG_KSU=m CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
+        ;;
+      sukisu)
+        CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
+        ;;
+      bakasu)
+        CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
+        ;;
+    esac
   )
 }
 
@@ -243,7 +198,7 @@ for variant in $variants; do
   artifact="$artifact_dir/${KMI}_kernelsu.ko"
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf '%s\t%s\t%s\n' "$variant" "$repo_url" "$artifact"
+    printf '%s\t%s\t%s\t%s\n' "$variant" "$repo_url" "$repo_ref" "$artifact"
     continue
   fi
 
@@ -257,16 +212,12 @@ for variant in $variants; do
     patch_abk_manager "$build_root"
   fi
 
-  if [ "$KMI" = "android16-7.0" ]; then
-    patch_android16_check_symbol "$build_dir"
-  fi
-
   if [ "$PATCH_ONLY" -eq 1 ]; then
     printf '[lkm] patched %s from %s\n' "$variant" "$repo_url"
     continue
   fi
 
-  build_variant_module "$KMI" "$variant" "$build_dir"
+  build_variant_module "$variant" "$build_dir"
   [ -f "$build_dir/kernelsu.ko" ] || die "build did not produce $build_dir/kernelsu.ko"
   cp "$build_dir/kernelsu.ko" "$artifact"
   strip_artifact "$artifact"
