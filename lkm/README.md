@@ -5,7 +5,7 @@ upstreams:
 
 - `tiann/KernelSU`
 - `SukiSU-Ultra/SukiSU-Ultra`
-- `ReSukiSU/ReSukiSU`
+- `Baka-SU/BakaSU`
 
 It clones them at build time, patches the ABK manager bridge into the cloned
 tree, and leaves `setup.sh` untouched.

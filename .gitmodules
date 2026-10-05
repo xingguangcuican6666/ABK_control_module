@@ -4,6 +4,6 @@
 [submodule "external/SukiSU-Ultra"]
 	path = external/SukiSU-Ultra
 	url = https://github.com/SukiSU-Ultra/SukiSU-Ultra.git
-[submodule "external/ReSukiSU"]
-	path = external/ReSukiSU
-	url = https://github.com/ReSukiSU/ReSukiSU.git
+[submodule "external/BakaSU"]
+	path = external/BakaSU
+	url = https://github.com/Baka-SU/BakaSU.git

@@ -6,12 +6,16 @@ DEFAULT_OUT_DIR="$ROOT_DIR/lkm/out"
 
 usage() {
   cat <<'EOF'
-usage: lkm/build.sh [--variant NAME|all] [--kmi KMI] [--out-dir PATH] [--dry-run] [--patch-only] [--no-abk-manager] [--list]
+usage: lkm/build.sh [--variant NAME|all] [--track stable|dev] [--kmi KMI] [--out-dir PATH] [--dry-run] [--patch-only] [--no-abk-manager] [--list]
 
 variants:
   kernelsu
   sukisu
-  resukisu
+  bakasu
+
+tracks:
+  stable    pinned commit (default), matches ABK's Stable tier
+  dev       pinned commit, matches ABK's Dev tier
 
 The build clones the upstream source at runtime, patches it with the ABK
 manager bridge by default, and then produces kernelsu.ko.
@@ -31,8 +35,8 @@ variant_repo_url() {
     sukisu)
       printf '%s\n' "${LKM_REPO_URL_SUKISU:-https://github.com/SukiSU-Ultra/SukiSU-Ultra.git}"
       ;;
-    resukisu)
-      printf '%s\n' "${LKM_REPO_URL_RESUKISU:-https://github.com/ReSukiSU/ReSukiSU.git}"
+    bakasu)
+      printf '%s\n' "${LKM_REPO_URL_BAKASU:-https://github.com/Baka-SU/BakaSU.git}"
       ;;
     *)
       return 1
@@ -40,16 +44,30 @@ variant_repo_url() {
   esac
 }
 
+# Per-tier pins, mirroring ABK's .github/scripts/resolve-ksu-ref.sh: Stable and Dev are
+# each pinned to their own commit (today the two point at the same SHA, but they are
+# maintained separately so one can move without the other), and no tier tracks a moving
+# main HEAD. A ref may also be a branch name, in which case clone_variant_source checks
+# that out instead. Override any tier with LKM_REPO_REF_<VARIANT>.
 variant_repo_ref() {
-  case "$1" in
-    kernelsu)
-      printf '%s\n' "${LKM_REPO_REF_KERNELSU:-}"
+  local track="$2"
+
+  case "$track" in
+    stable)
+      case "$1" in
+        kernelsu) printf '%s\n' "${LKM_REPO_REF_KERNELSU:-08a3b087e49227c8a6731c5f1114998b5e25255b}" ;;
+        sukisu)   printf '%s\n' "${LKM_REPO_REF_SUKISU:-cf87e3f4ddd3f6e5464d85acf56aaa6950e70841}" ;;
+        bakasu)   printf '%s\n' "${LKM_REPO_REF_BAKASU:-9dbce02e511ea6b6305a238b84e456f6a92e1d0b}" ;;
+        *) return 1 ;;
+      esac
       ;;
-    sukisu)
-      printf '%s\n' "${LKM_REPO_REF_SUKISU:-}"
-      ;;
-    resukisu)
-      printf '%s\n' "${LKM_REPO_REF_RESUKISU:-}"
+    dev)
+      case "$1" in
+        kernelsu) printf '%s\n' "${LKM_REPO_REF_KERNELSU:-08a3b087e49227c8a6731c5f1114998b5e25255b}" ;;
+        sukisu)   printf '%s\n' "${LKM_REPO_REF_SUKISU:-cf87e3f4ddd3f6e5464d85acf56aaa6950e70841}" ;;
+        bakasu)   printf '%s\n' "${LKM_REPO_REF_BAKASU:-9dbce02e511ea6b6305a238b84e456f6a92e1d0b}" ;;
+        *) return 1 ;;
+      esac
       ;;
     *)
       return 1
@@ -108,76 +126,28 @@ patch_abk_manager() {
     python3 "$ROOT_DIR/scripts/abk_control_ksu_patch.py"
 }
 
-patch_android16_check_symbol() {
-  local build_dir="$1"
-  local check_symbol="$build_dir/tools/check_symbol.c"
-
-  [ -f "$check_symbol" ] || return 0
-
-  python3 - "$check_symbol" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-old = """    if (ko_version_sec->sh_size != 0) {\n        fprintf(stderr, \"Error: __versions section in %s must have size 0 (actual=%llu)\\n\", ko_path,\n                (unsigned long long)ko_version_sec->sh_size);\n        close_elf(&ko_elf);\n        close_elf(&vmlinux);\n        return 1;\n    }\n"""
-new = """    if (ko_version_sec->sh_size != 0) {\n        fprintf(stderr, \"Warning: __versions section in %s has size %llu\\n\", ko_path,\n                (unsigned long long)ko_version_sec->sh_size);\n    }\n"""
-text = path.read_text()
-if old not in text:
-    raise SystemExit(f"expected check_symbol block not found in {path}")
-path.write_text(text.replace(old, new, 1))
-PY
-}
-
 build_variant_module() {
-  local kmi="$1"
-  local variant="$2"
-  local build_dir="$3"
-
-  if [ "$kmi" != "android16-7.0" ]; then
-    (
-      cd "$build_dir"
-      case "$variant" in
-        kernelsu)
-          CONFIG_KSU=m CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
-          ;;
-        sukisu)
-          CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
-          ;;
-        resukisu)
-          CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
-          ;;
-      esac
-    )
-    return
-  fi
-
-  local make_args=(
-    make
-    ARCH=arm64
-    SUBARCH=arm64
-    LLVM=1
-    LLVM_IAS=1
-    CC=clang
-    "KCFLAGS=$FRAME_WARN_KCFLAGS"
-    CONFIG_KSU=m
-  )
-
-  case "$variant" in
-    sukisu)
-      make_args+=(CONFIG_KSU_TRACEPOINT_HOOK=y)
-      ;;
-    resukisu)
-      make_args+=(CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y)
-      ;;
-  esac
+  local variant="$1"
+  local build_dir="$2"
 
   (
     cd "$build_dir"
-    "${make_args[@]}"
+    case "$variant" in
+      kernelsu)
+        CONFIG_KSU=m CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
+        ;;
+      sukisu)
+        CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
+        ;;
+      bakasu)
+        CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
+        ;;
+    esac
   )
 }
 
 VARIANT="${LKM_VARIANT:-all}"
+TRACK="${LKM_TRACK:-stable}"
 KMI="${LKM_KMI:-${DDK_TARGET:-}}"
 OUT_DIR="${LKM_OUT_DIR:-$DEFAULT_OUT_DIR}"
 DRY_RUN=0
@@ -190,6 +160,11 @@ while [ $# -gt 0 ]; do
     --variant)
       [ $# -ge 2 ] || die "--variant needs a value"
       VARIANT="$2"
+      shift 2
+      ;;
+    --track)
+      [ $# -ge 2 ] || die "--track needs a value"
+      TRACK="$2"
       shift 2
       ;;
     --kmi)
@@ -215,7 +190,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --list)
-      printf '%s\n' kernelsu sukisu resukisu
+      printf '%s\n' kernelsu sukisu bakasu
       exit 0
       ;;
     -h|--help)
@@ -231,19 +206,19 @@ done
 [ -n "$KMI" ] || die "missing --kmi or LKM_KMI/DDK_TARGET"
 
 if [ "$VARIANT" = "all" ]; then
-  variants="kernelsu sukisu resukisu"
+  variants="kernelsu sukisu bakasu"
 else
   variants="$VARIANT"
 fi
 
 for variant in $variants; do
   repo_url="$(variant_repo_url "$variant")" || die "unsupported variant: $variant"
-  repo_ref="$(variant_repo_ref "$variant")" || die "unsupported variant: $variant"
+  repo_ref="$(variant_repo_ref "$variant" "$TRACK")" || die "unsupported variant/track: $variant/$TRACK"
   artifact_dir="$OUT_DIR/$variant"
   artifact="$artifact_dir/${KMI}_kernelsu.ko"
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf '%s\t%s\t%s\n' "$variant" "$repo_url" "$artifact"
+    printf '%s\t%s\t%s\t%s\n' "$variant" "$repo_url" "$repo_ref" "$artifact"
     continue
   fi
 
@@ -257,16 +232,12 @@ for variant in $variants; do
     patch_abk_manager "$build_root"
   fi
 
-  if [ "$KMI" = "android16-7.0" ]; then
-    patch_android16_check_symbol "$build_dir"
-  fi
-
   if [ "$PATCH_ONLY" -eq 1 ]; then
     printf '[lkm] patched %s from %s\n' "$variant" "$repo_url"
     continue
   fi
 
-  build_variant_module "$KMI" "$variant" "$build_dir"
+  build_variant_module "$variant" "$build_dir"
 
   [ -f "$build_dir/kernelsu.ko" ] || die "build did not produce $build_dir/kernelsu.ko"
   cp "$build_dir/kernelsu.ko" "$artifact"

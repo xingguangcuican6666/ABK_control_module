@@ -246,31 +246,47 @@ EOF_DIS
 
 KERNELSU_REPO="$(make_fake_repo kernelsu)"
 SUKISU_REPO="$(make_fake_repo sukisu)"
-RESUKISU_REPO="$(make_fake_repo resukisu)"
+BAKASU_REPO="$(make_fake_repo bakasu)"
 
 assert_variant() {
   local variant="$1"
   local kmi="$2"
   local expected_url="$3"
-  local expected_artifact="$4"
+  local expected_ref="$4"
+  local expected_artifact="$5"
   local output
 
-  output="$(LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" LKM_REPO_URL_SUKISU="$SUKISU_REPO" LKM_REPO_URL_RESUKISU="$RESUKISU_REPO" bash "$REPO_ROOT/lkm/build.sh" --variant "$variant" --kmi "$kmi" --dry-run)"
-  assert_line "$(printf '%s\t%s\t%s' "$variant" "$expected_url" "$expected_artifact")" "$output"
+  output="$(LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" LKM_REPO_URL_SUKISU="$SUKISU_REPO" LKM_REPO_URL_BAKASU="$BAKASU_REPO" bash "$REPO_ROOT/lkm/build.sh" --variant "$variant" --kmi "$kmi" --dry-run)"
+  assert_line "$(printf '%s\t%s\t%s\t%s' "$variant" "$expected_url" "$expected_ref" "$expected_artifact")" "$output"
 }
 
-assert_variant kernelsu android15-6.6 "$KERNELSU_REPO" "$REPO_ROOT/lkm/out/kernelsu/android15-6.6_kernelsu.ko"
-assert_variant sukisu android15-6.6 "$SUKISU_REPO" "$REPO_ROOT/lkm/out/sukisu/android15-6.6_kernelsu.ko"
-assert_variant resukisu android16-6.12 "$RESUKISU_REPO" "$REPO_ROOT/lkm/out/resukisu/android16-6.12_kernelsu.ko"
+KERNELSU_PIN="08a3b087e49227c8a6731c5f1114998b5e25255b"
+SUKISU_PIN="cf87e3f4ddd3f6e5464d85acf56aaa6950e70841"
+BAKASU_PIN="9dbce02e511ea6b6305a238b84e456f6a92e1d0b"
 
-custom_out="$(LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" LKM_REPO_URL_SUKISU="$SUKISU_REPO" LKM_REPO_URL_RESUKISU="$RESUKISU_REPO" LKM_OUT_DIR="$REPO_ROOT/custom-out" bash "$REPO_ROOT/lkm/build.sh" --variant kernelsu --kmi android14-6.1 --dry-run)"
-assert_line "$(printf '%s\t%s\t%s' kernelsu "$KERNELSU_REPO" "$REPO_ROOT/custom-out/kernelsu/android14-6.1_kernelsu.ko")" "$custom_out"
+assert_variant kernelsu android15-6.6 "$KERNELSU_REPO" "$KERNELSU_PIN" "$REPO_ROOT/lkm/out/kernelsu/android15-6.6_kernelsu.ko"
+assert_variant sukisu android15-6.6 "$SUKISU_REPO" "$SUKISU_PIN" "$REPO_ROOT/lkm/out/sukisu/android15-6.6_kernelsu.ko"
+assert_variant bakasu android16-6.12 "$BAKASU_REPO" "$BAKASU_PIN" "$REPO_ROOT/lkm/out/bakasu/android16-6.12_kernelsu.ko"
+
+custom_out="$(LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" LKM_REPO_URL_SUKISU="$SUKISU_REPO" LKM_REPO_URL_BAKASU="$BAKASU_REPO" LKM_OUT_DIR="$REPO_ROOT/custom-out" bash "$REPO_ROOT/lkm/build.sh" --variant kernelsu --kmi android14-6.1 --dry-run)"
+assert_line "$(printf '%s\t%s\t%s\t%s' kernelsu "$KERNELSU_REPO" "$KERNELSU_PIN" "$REPO_ROOT/custom-out/kernelsu/android14-6.1_kernelsu.ko")" "$custom_out"
+
+override_out="$(LKM_REPO_REF_BAKASU=deadbeef LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" LKM_REPO_URL_SUKISU="$SUKISU_REPO" LKM_REPO_URL_BAKASU="$BAKASU_REPO" bash "$REPO_ROOT/lkm/build.sh" --variant bakasu --kmi android16-6.12 --dry-run)"
+assert_line "$(printf '%s\t%s\t%s\t%s' bakasu "$BAKASU_REPO" deadbeef "$REPO_ROOT/lkm/out/bakasu/android16-6.12_kernelsu.ko")" "$override_out"
 
 fake_bin="$TMP_DIR/bin"
 mkdir -p "$fake_bin"
+# Every KMI now builds via `CONFIG_X=y make`, so the variant flags travel in the
+# environment rather than as make arguments; record both.
 cat > "$fake_bin/make" <<'EOF_MAKE'
 #!/usr/bin/env bash
-printf '%s\n' "$*" > "$ABK_TEST_CAPTURE_MAKE_ARGS"
+{
+  printf 'args=%s\n' "$*"
+  printf 'CONFIG_KSU=%s\n' "${CONFIG_KSU-}"
+  printf 'CONFIG_KSU_TRACEPOINT_HOOK=%s\n' "${CONFIG_KSU_TRACEPOINT_HOOK-}"
+  printf 'CONFIG_KSU_MULTI_MANAGER_SUPPORT=%s\n' "${CONFIG_KSU_MULTI_MANAGER_SUPPORT-}"
+  printf 'CC=%s\n' "${CC-}"
+} > "$ABK_TEST_CAPTURE_MAKE_ARGS"
 if grep -q 'xingguang_ddk' Makefile 2>/dev/null; then
   echo "unexpected xingguang_ddk-specific Makefile mutation" >&2
   exit 1
@@ -283,28 +299,65 @@ PATH="$fake_bin:$PATH" \
 ABK_TEST_CAPTURE_MAKE_ARGS="$TMP_DIR/make.args" \
 LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" \
 LKM_REPO_URL_SUKISU="$SUKISU_REPO" \
-LKM_REPO_URL_RESUKISU="$RESUKISU_REPO" \
-bash "$REPO_ROOT/lkm/build.sh" --variant resukisu --kmi android16-7.0 >/dev/null
+LKM_REPO_URL_BAKASU="$BAKASU_REPO" \
+bash "$REPO_ROOT/lkm/build.sh" --variant bakasu --kmi android16-6.12 >/dev/null
 
 make_args_path="$TMP_DIR/make.args"
-[ -n "$make_args_path" ] || {
-  printf 'missing captured make arguments\n' >&2
+[ -s "$make_args_path" ] || {
+  printf 'missing captured make invocation\n' >&2
   exit 1
 }
 captured_make_args="$(cat "$make_args_path")"
-if ! [[ "$captured_make_args" == *"ARCH=arm64"* &&
-    "$captured_make_args" == *"SUBARCH=arm64"* &&
-    "$captured_make_args" == *"LLVM=1"* &&
-    "$captured_make_args" == *"LLVM_IAS=1"* &&
-    "$captured_make_args" == *"CONFIG_KSU=m"* &&
+if ! [[ "$captured_make_args" == *"CONFIG_KSU=m"* &&
     "$captured_make_args" == *"CONFIG_KSU_TRACEPOINT_HOOK=y"* &&
     "$captured_make_args" == *"CONFIG_KSU_MULTI_MANAGER_SUPPORT=y"* &&
     "$captured_make_args" == *"CC=clang"* ]]; then
-  printf 'unexpected make args: %s\n' "$captured_make_args" >&2
+  printf 'unexpected make invocation:\n%s\n' "$captured_make_args" >&2
+  exit 1
+fi
+
+# Every KMI builds through the same path, so nothing may smuggle back in the per-KMI
+# arch overrides that only the removed android16-7.0 job needed.
+if [[ "$captured_make_args" == *"ARCH="* || "$captured_make_args" == *"LLVM=1"* ]]; then
+  printf 'make args still carry per-KMI arch overrides:\n%s\n' "$captured_make_args" >&2
   exit 1
 fi
 
 list_output="$(bash "$REPO_ROOT/lkm/build.sh" --list)"
-assert_line $'kernelsu\nsukisu\nresukisu' "$list_output"
+assert_line $'kernelsu\nsukisu\nbakasu' "$list_output"
+
+# Default pins must stay identical to ABK's resolve-ksu-ref.sh Stable tier; drift here
+# silently bundles an LKM built against a different kernel than the one shipped beside it.
+assert_resolved_pin() {
+  local variant="$1"
+  local track="$2"
+  local expected_ref="$3"
+  local out
+  # dry-run prints "<variant>\t<url>\t<ref>\t<artifact>"; the URL is overridden per
+  # variant above only where a fake repo exists, so compare the ref field alone.
+  out="$(bash "$REPO_ROOT/lkm/build.sh" --variant "$variant" --track "$track" --kmi android16-6.12 --dry-run | cut -f3)"
+  assert_line "$expected_ref" "$out"
+}
+
+assert_resolved_pin kernelsu stable "$KERNELSU_PIN"
+assert_resolved_pin sukisu stable "$SUKISU_PIN"
+assert_resolved_pin bakasu stable "$BAKASU_PIN"
+
+# Dev is a separate pin, not an alias for stable: the two are maintained independently so
+# one can move without the other. They agree today, which a resolved-ref assertion cannot
+# tell apart from dev silently inheriting stable's value -- so require each tier to carry
+# its own literal, exactly once per variant, in lkm/build.sh.
+for pin_spec in \
+  "LKM_REPO_REF_KERNELSU:$KERNELSU_PIN" \
+  "LKM_REPO_REF_SUKISU:$SUKISU_PIN" \
+  "LKM_REPO_REF_BAKASU:$BAKASU_PIN"; do
+  override="${pin_spec%%:*}"
+  pin="${pin_spec##*:}"
+  declared="$(grep -c -- "$override:-$pin" "$REPO_ROOT/lkm/build.sh")"
+  if [ "$declared" -ne 2 ]; then
+    printf 'expected 2 declarations of %s (one per tier), found %s\n' "$override" "$declared" >&2
+    exit 1
+  fi
+done
 
 printf 'lkm_build_test passed\n'

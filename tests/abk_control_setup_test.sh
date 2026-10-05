@@ -306,7 +306,7 @@ EOF_SINGLE_APP_PROFILE
   make_dispatch_fixture "$dir"
 }
 
-make_resukisu_fixture() {
+make_bakasu_fixture() {
   local dir="$1"
 
   mkdir -p "$dir/manager"
@@ -315,7 +315,7 @@ make_resukisu_fixture() {
 #define CERT_MAX_LENGTH 1024
 
 static apk_sign_key_t apk_sign_keys[] = {
-    { EXPECTED_SIZE_RESUKISU, EXPECTED_HASH_RESUKISU },
+    { EXPECTED_SIZE_BAKASU, EXPECTED_HASH_BAKASU },
 };
 
 bool is_manager_apk(char *path, u8 *signature_index)
@@ -338,7 +338,7 @@ EOF_RE_APK
 #define __KSU_H_THRONE_TRACKER
 
 #define TRACK_THRONE_PRUNE_ONLY (1 << 0)
-#define TRACK_THRONE_FORCE_SEARCH_MGR (1 << 1)
+#define TRACK_THRONE_FORCE_SYNCHRONOUS (1 << 2)
 
 #ifdef CONFIG_KSU_DISABLE_MANAGER
 static inline void track_throne(unsigned int flags)
@@ -368,7 +368,7 @@ EOF_RE_TRACKER
 
 make_single_ksu_fixture "$KERNEL_ROOT/KernelSU/kernel"
 make_single_ksu_fixture "$KERNEL_ROOT/drivers/kernelsu"
-make_resukisu_fixture "$KERNEL_ROOT/common/drivers/kernelsu"
+make_bakasu_fixture "$KERNEL_ROOT/common/drivers/kernelsu"
 
 make_module() {
   local dir="$1"
