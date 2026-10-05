@@ -20,7 +20,7 @@ jobs:
         variant:
           - kernelsu
           - sukisu
-          - resukisu
+          - bakasu
         kmi:
           - android12-5.10
           - android13-5.10

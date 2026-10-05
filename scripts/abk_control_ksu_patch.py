@@ -258,7 +258,13 @@ void abk_try_register_manager(void);
     print(f"ABK Control: declared manager registration hook in {path}")
 
 
-def is_resukisu_tracker(ksu_dir: Path) -> bool:
+def is_bakasu_tracker(ksu_dir: Path) -> bool:
+    """True for Baka-SU/BakaSU, whose tracker defers work through do_track_throne().
+
+    Keyed on the flag set that only that upstream defines. KernelSU and SukiSU-Ultra
+    still expose track_throne(bool prune_only) with no do_track_throne, so they keep
+    taking the single-manager path below.
+    """
     path = ksu_dir / "manager/throne_tracker.c"
     header_path = ksu_dir / "manager/throne_tracker.h"
     if not path.exists() or not header_path.exists():
@@ -268,7 +274,7 @@ def is_resukisu_tracker(ksu_dir: Path) -> bool:
     return (
         "do_track_throne" in text
         and "track_throne(unsigned int flags)" in header
-        and "TRACK_THRONE_FORCE_SEARCH_MGR" in header
+        and "TRACK_THRONE_FORCE_SYNCHRONOUS" in header
     )
 
 
@@ -667,13 +673,13 @@ void abk_try_register_manager(void)
     return text.replace(anchor, block + anchor, 1), True
 
 
-def patch_resukisu_tracker(path: Path) -> None:
+def patch_bakasu_tracker(path: Path) -> None:
     text = path.read_text(errors="ignore")
     if "void abk_try_register_manager(void)" in text:
         return
     anchor = "\nvoid track_throne(unsigned int flags)\n"
     if anchor not in text:
-        raise SystemExit(f"{path} missing ReSukiSU track_throne anchor")
+        raise SystemExit(f"{path} missing BakaSU track_throne anchor")
     block = """
 #ifdef ABK_MANAGER_OFFICIAL_CERT
 void abk_try_register_manager(void)
@@ -687,13 +693,15 @@ void abk_try_register_manager(void)
     if (!tts)
         return;
 
-    tts->flags = TRACK_THRONE_FORCE_SEARCH_MGR;
+    // Run the search here and now: registration has to land before we return, and
+    // deferring it to init would race with callers asking ksu_has_manager() right after.
+    tts->flags = TRACK_THRONE_FORCE_SYNCHRONOUS;
     do_track_throne(tts);
 }
 #endif
 """
     path.write_text(text.replace(anchor, block + anchor, 1))
-    print(f"ABK Control: patched ReSukiSU manager registration in {path}")
+    print(f"ABK Control: patched BakaSU manager registration in {path}")
 
 
 def patch_single_manager_tracker(ksu_dir: Path, path: Path) -> None:
@@ -803,7 +811,7 @@ def ensure_tp_marker_include(text: str, path: Path) -> str:
 def patch_official_app_profile_thread_iter(ksu_dir: Path) -> None:
     if os.environ.get("ABK_BUILD_KSU_VARIANT") != "Official":
         return
-    if is_resukisu_tracker(ksu_dir):
+    if is_bakasu_tracker(ksu_dir):
         return
 
     path = ksu_dir / "policy/app_profile.c"
@@ -891,8 +899,8 @@ def patch_tracker(ksu_dir: Path) -> None:
     path = ksu_dir / "manager/throne_tracker.c"
     if not path.exists():
         raise SystemExit(f"{path} is missing")
-    if is_resukisu_tracker(ksu_dir):
-        patch_resukisu_tracker(path)
+    if is_bakasu_tracker(ksu_dir):
+        patch_bakasu_tracker(path)
     else:
         patch_single_manager_tracker(ksu_dir, path)
         patch_single_manager_allowlist(ksu_dir)
@@ -1050,7 +1058,7 @@ def validate_ksu_dir(ksu_dir: Path, require_control_bridge: bool) -> None:
     if require_control_bridge:
         required[ksu_dir / "supercall/dispatch.c"].append("ABK_CONTROL_IOCTL_GET_STATUS")
 
-    if not is_resukisu_tracker(ksu_dir):
+    if not is_bakasu_tracker(ksu_dir):
         required[ksu_dir / "manager/manager_identity.h"] = [
             "ABK_MANAGER_MULTI_MANAGER_BRIDGE",
             "ksu_register_manager",
@@ -1070,7 +1078,7 @@ def validate_ksu_dir(ksu_dir: Path, require_control_bridge: bool) -> None:
         if missing:
             raise SystemExit(f"{path} missing ABK Control injection: {', '.join(missing)}")
 
-    if not is_resukisu_tracker(ksu_dir):
+    if not is_bakasu_tracker(ksu_dir):
         tracker = (ksu_dir / "manager/throne_tracker.c").read_text(errors="ignore")
         forbidden = [
             "ABK Control: prefer ABK manager",

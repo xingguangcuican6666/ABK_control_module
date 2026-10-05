@@ -246,7 +246,7 @@ EOF_DIS
 
 KERNELSU_REPO="$(make_fake_repo kernelsu)"
 SUKISU_REPO="$(make_fake_repo sukisu)"
-RESUKISU_REPO="$(make_fake_repo resukisu)"
+BAKASU_REPO="$(make_fake_repo bakasu)"
 
 assert_variant() {
   local variant="$1"
@@ -255,15 +255,15 @@ assert_variant() {
   local expected_artifact="$4"
   local output
 
-  output="$(LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" LKM_REPO_URL_SUKISU="$SUKISU_REPO" LKM_REPO_URL_RESUKISU="$RESUKISU_REPO" bash "$REPO_ROOT/lkm/build.sh" --variant "$variant" --kmi "$kmi" --dry-run)"
+  output="$(LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" LKM_REPO_URL_SUKISU="$SUKISU_REPO" LKM_REPO_URL_BAKASU="$BAKASU_REPO" bash "$REPO_ROOT/lkm/build.sh" --variant "$variant" --kmi "$kmi" --dry-run)"
   assert_line "$(printf '%s\t%s\t%s' "$variant" "$expected_url" "$expected_artifact")" "$output"
 }
 
 assert_variant kernelsu android15-6.6 "$KERNELSU_REPO" "$REPO_ROOT/lkm/out/kernelsu/android15-6.6_kernelsu.ko"
 assert_variant sukisu android15-6.6 "$SUKISU_REPO" "$REPO_ROOT/lkm/out/sukisu/android15-6.6_kernelsu.ko"
-assert_variant resukisu android16-6.12 "$RESUKISU_REPO" "$REPO_ROOT/lkm/out/resukisu/android16-6.12_kernelsu.ko"
+assert_variant bakasu android16-6.12 "$BAKASU_REPO" "$REPO_ROOT/lkm/out/bakasu/android16-6.12_kernelsu.ko"
 
-custom_out="$(LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" LKM_REPO_URL_SUKISU="$SUKISU_REPO" LKM_REPO_URL_RESUKISU="$RESUKISU_REPO" LKM_OUT_DIR="$REPO_ROOT/custom-out" bash "$REPO_ROOT/lkm/build.sh" --variant kernelsu --kmi android14-6.1 --dry-run)"
+custom_out="$(LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" LKM_REPO_URL_SUKISU="$SUKISU_REPO" LKM_REPO_URL_BAKASU="$BAKASU_REPO" LKM_OUT_DIR="$REPO_ROOT/custom-out" bash "$REPO_ROOT/lkm/build.sh" --variant kernelsu --kmi android14-6.1 --dry-run)"
 assert_line "$(printf '%s\t%s\t%s' kernelsu "$KERNELSU_REPO" "$REPO_ROOT/custom-out/kernelsu/android14-6.1_kernelsu.ko")" "$custom_out"
 
 fake_bin="$TMP_DIR/bin"
@@ -283,8 +283,8 @@ PATH="$fake_bin:$PATH" \
 ABK_TEST_CAPTURE_MAKE_ARGS="$TMP_DIR/make.args" \
 LKM_REPO_URL_KERNELSU="$KERNELSU_REPO" \
 LKM_REPO_URL_SUKISU="$SUKISU_REPO" \
-LKM_REPO_URL_RESUKISU="$RESUKISU_REPO" \
-bash "$REPO_ROOT/lkm/build.sh" --variant resukisu --kmi android16-7.0 >/dev/null
+LKM_REPO_URL_BAKASU="$BAKASU_REPO" \
+bash "$REPO_ROOT/lkm/build.sh" --variant bakasu --kmi android16-7.0 >/dev/null
 
 make_args_path="$TMP_DIR/make.args"
 [ -n "$make_args_path" ] || {
@@ -305,6 +305,6 @@ if ! [[ "$captured_make_args" == *"ARCH=arm64"* &&
 fi
 
 list_output="$(bash "$REPO_ROOT/lkm/build.sh" --list)"
-assert_line $'kernelsu\nsukisu\nresukisu' "$list_output"
+assert_line $'kernelsu\nsukisu\nbakasu' "$list_output"
 
 printf 'lkm_build_test passed\n'

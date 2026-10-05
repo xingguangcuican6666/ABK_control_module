@@ -24,14 +24,14 @@ The `after_patch` stage installs the kernel source files. The `before_build`
 stage installs the files again for safety, generates the metadata and build
 manifest, and enables `CONFIG_ABK_CONTROL=y`.
 
-KernelSU / SukiSU-Ultra / ReSukiSU LKM builds are kept separately under
+KernelSU / SukiSU-Ultra / BakaSU LKM builds are kept separately under
 `lkm/`. That workspace dynamically clones the upstream sources at build time,
 patches them with the ABK manager bridge, and does not participate in
 `setup.sh`.
 
 ## Manager Identity
 
-The module also patches KernelSU / SukiSU / ReSukiSU manager recognition so the
+The module also patches KernelSU / SukiSU / BakaSU manager recognition so the
 ABK app can act as the native manager. By default it trusts:
 
 - package: `com.abk.kernel`

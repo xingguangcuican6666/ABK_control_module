@@ -11,7 +11,7 @@ usage: lkm/build.sh [--variant NAME|all] [--kmi KMI] [--out-dir PATH] [--dry-run
 variants:
   kernelsu
   sukisu
-  resukisu
+  bakasu
 
 The build clones the upstream source at runtime, patches it with the ABK
 manager bridge by default, and then produces kernelsu.ko.
@@ -31,8 +31,8 @@ variant_repo_url() {
     sukisu)
       printf '%s\n' "${LKM_REPO_URL_SUKISU:-https://github.com/SukiSU-Ultra/SukiSU-Ultra.git}"
       ;;
-    resukisu)
-      printf '%s\n' "${LKM_REPO_URL_RESUKISU:-https://github.com/ReSukiSU/ReSukiSU.git}"
+    bakasu)
+      printf '%s\n' "${LKM_REPO_URL_BAKASU:-https://github.com/Baka-SU/BakaSU.git}"
       ;;
     *)
       return 1
@@ -48,8 +48,8 @@ variant_repo_ref() {
     sukisu)
       printf '%s\n' "${LKM_REPO_REF_SUKISU:-}"
       ;;
-    resukisu)
-      printf '%s\n' "${LKM_REPO_REF_RESUKISU:-}"
+    bakasu)
+      printf '%s\n' "${LKM_REPO_REF_BAKASU:-}"
       ;;
     *)
       return 1
@@ -143,7 +143,7 @@ build_variant_module() {
         sukisu)
           CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
           ;;
-        resukisu)
+        bakasu)
           CONFIG_KSU=m CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y CC=clang KCFLAGS="$FRAME_WARN_KCFLAGS" make
           ;;
       esac
@@ -166,7 +166,7 @@ build_variant_module() {
     sukisu)
       make_args+=(CONFIG_KSU_TRACEPOINT_HOOK=y)
       ;;
-    resukisu)
+    bakasu)
       make_args+=(CONFIG_KSU_TRACEPOINT_HOOK=y CONFIG_KSU_MULTI_MANAGER_SUPPORT=y)
       ;;
   esac
@@ -215,7 +215,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     --list)
-      printf '%s\n' kernelsu sukisu resukisu
+      printf '%s\n' kernelsu sukisu bakasu
       exit 0
       ;;
     -h|--help)
@@ -231,7 +231,7 @@ done
 [ -n "$KMI" ] || die "missing --kmi or LKM_KMI/DDK_TARGET"
 
 if [ "$VARIANT" = "all" ]; then
-  variants="kernelsu sukisu resukisu"
+  variants="kernelsu sukisu bakasu"
 else
   variants="$VARIANT"
 fi
